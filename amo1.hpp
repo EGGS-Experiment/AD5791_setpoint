@@ -52,11 +52,6 @@ enum {
     amo1_screen_tag_on      , // 13
 };
 
-//////////////////////////////////////////////////////////////////////////////////////
-// Member Variables
-//////////////////////////////////////////////////////////////////////////////////////
-
-// screen variables
 int16_t amo1_screen_x, amo1_screen_y;
 int16_t amo1_screen_current_dur;
 int amo1_screen_last_dur = 0;
@@ -98,6 +93,7 @@ void amo1_init()
 {
   // screen init
   CleO.begin();
+  CleO.Display(100);
   CleO.Start();
   CleO.RectangleJustification(MM);
   CleO.SetBackgroundcolor(0xe9d3ebUL);
