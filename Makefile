@@ -1,7 +1,9 @@
 #
 # Makefile
 #
-# Copyright 2013--2016 Christian Schneider <software(at)chschneider(dot)eu>
+# Copyright 2013--2016 
+#  Christian Schneider <software(at)chschneider(dot)eu>
+#  Peter Yu <ucla(dot)eshop(at)gmail(dot)com>
 #
 # This file is part of the MOTion trap control unit firmware
 # (called "program" in the following).
@@ -21,9 +23,13 @@
 
 export PATH := /opt/tfs/4.0.0/x86_64-avr/bin:$(PATH)
 
+# file list
 SRCFILES   := $(wildcard *.c)
+SRCFILESCPP:= $(wildcard *.cpp)
 HDRFILES   := $(wildcard *.h)
+HDRFILESCPP:= $(wildcard *.hpp)
 OBJFILES   := $(patsubst %.c,%.o,$(SRCFILES))
+OBJFILESCPP:= $(patsubst %.cpp,%.o,$(SRCFILESCPP))
 A2RUNFILE  := apache2_is_running
 
 # target for normal firmware
@@ -81,6 +87,7 @@ CONSOLE_PORT := $(firstword $(wildcard /dev/ttyUSB* /dev/ttyACM*))
 
 # toolchain
 CC         := avr-gcc
+CXX        := avr-g++
 LD         := avr-ld
 OBJCOPY    := avr-objcopy
 AVRDUDE    := avrdude
@@ -89,6 +96,9 @@ MINICOM    := minicom
 override CFLAGS  := -O2 -Wall -pedantic -std=iso9899:1999 \
                     -mmcu=$(MCU) -DF_CPU=$(CPU_FREQ) -DBAUD=$(BAUDRATE) \
                     $(CFLAGS)
+override CXXFLAGS:= -O2 -Wall -pedantic -std=c++11 \
+                    -mmcu=$(MCU) -DF_CPU=$(CPU_FREQ) -DBAUD=$(BAUDRATE) \
+                    $(CXXFLAGS)
 override LDFLAGS := -mmcu=$(MCU) -lm \
                     -Wl,-u,vfprintf -lprintf_flt \
                     -Wl,-u,vfscanf -lscanf_flt $(LDFLAGS)
@@ -103,8 +113,11 @@ AVRDUDE_FLAGS_BL := -p $(MCU) -P $(PORT_BL) -c $(PROGRAMMER_BL)
 %.o: %.c $(HDRFILES)
 	$(CC) $(CFLAGS) -c  -o$@ $<
 
-%.elf: $(OBJFILES)
-	$(CC) $(LDFLAGS) -o$@ $^
+%.o: %.cpp $(HDRFILES) $(HDRFILESCPP)
+	$(CXX) $(CXXFLAGS) -c  -o$@ $<
+
+%.elf: $(OBJFILES) $(OBJFILESCPP)
+	$(CXX) $(LDFLAGS) -o$@ $^
 
 $(TARGET).hex: %.hex: %.elf
 	$(OBJCOPY) -O ihex -R .eeprom $< $@

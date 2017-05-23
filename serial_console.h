@@ -22,6 +22,10 @@
 #ifndef SERIAL_CONSOLE_H
 #define SERIAL_CONSOLE_H 1
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // initializes primary serial port (8 bits, no parity, 1 stop bit (8N1))
 // and maps stdin and stdout to serial port
 void serial_console_init();
@@ -30,5 +34,9 @@ void serial_console_init();
 // sending back the received character
 void serial_console_echo(const int b);
 void serial_console_echo_reset();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  // SERIAL_CONSOLE_H
