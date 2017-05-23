@@ -30,7 +30,7 @@
 #include "spi_flex.h"
 
 #include "CleO.hpp"
-#include "screen.hpp"
+#include "amo1.hpp"
 
 int main(void) {
   // ////////////////////////////////////////////////////////////////////////
@@ -42,6 +42,9 @@ int main(void) {
 
   // initialize serial console and redirect printf(), getchar() etc. to it
   serial_console_init();  // enables interrupt!
+  
+  // AMO1
+  amo1_init();
 
   // ////////////////////////////////////////////////////////////////////////
   // boot indicator
@@ -61,31 +64,11 @@ int main(void) {
   // ////////////////////////////////////////////////////////////////////////
 
   // give status message
-  printf("Ready.\n");
-  //spi_flex_init(0);
+  printf("Ready\n");
   
-  CleO.begin();
-  CleO.Start();
-  CleO.RectangleJustification(MM);
-  CleO.SetBackgroundcolor(0xe9d3ebUL);
-  CleO.Show();
- 
-  CleO.DisplayRotate(2, 0);
-  CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
-  
-  int counter=0;
-  
-  updateScreen();
-  
-  printf("CleO Version = %d\n", CleO.Version());
-  printf("CleO ID = %d\n", CleO.ModuleIdentifier());
-  //CleO.Noop();
-  //printf("CleO Noop() Echo = %d\n", CleO.Echo());
-  //printf("spi_flex_read_byte = 0x%x\n", spi_flex_read_byte(0));
-  //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
-
   // echo
   //char c;
+  int counter=0;
   for (;;) {
     /*
     c = getchar();
@@ -96,10 +79,9 @@ int main(void) {
     }
     if (c == '0') {
       led_off();
-      printf("Version %u\n", CleO.Version());
     }*/
     if (counter%10==0) {
-      updateScreen();
+      amo1_screen_refresh();
     }
     counter++;
   }

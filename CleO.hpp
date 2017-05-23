@@ -1,5 +1,6 @@
 #ifndef CLEO_H
 #define CLEO_H 1
+// CleO_1.0.0
 
 #include <stdio.h>
 #include <string.h>
