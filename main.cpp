@@ -76,10 +76,16 @@ int main(void) {
   int counter=0;
   
   updateScreen();
+  
+  printf("CleO Version = %d\n", CleO.Version());
+  printf("CleO ID = %d\n", CleO.ModuleIdentifier());
+  //CleO.Noop();
+  //printf("CleO Noop() Echo = %d\n", CleO.Echo());
+  //printf("spi_flex_read_byte = 0x%x\n", spi_flex_read_byte(0));
+  //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
 
   // echo
   //char c;
-  //spi_flex_init(0);
   for (;;) {
     /*
     c = getchar();
@@ -94,16 +100,8 @@ int main(void) {
     }*/
     if (counter%10==0) {
       updateScreen();
-      printf("counter=%u\n", counter);
-      printf("Version %d\n", CleO.Version());
-      printf("ID %d\n", CleO.ModuleIdentifier());
-      CleO.Noop();
-      printf("Echo %d\n", CleO.Echo());
-      //printf("Read 0x%x\n", spi_flex_read_byte(0));
-      //printf("Echo 0x%x\n", spi_flex_read_write_lbyte(0, 0x8e));
     }
     counter++;
-    //printf("counter=%u\n", counter);
   }
 
   return 0;

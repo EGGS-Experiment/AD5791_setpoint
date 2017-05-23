@@ -1,6 +1,3 @@
-//#include <string.h>
-//#include <Arduino.h>
-//#include "SPI.h"
 #include "CleO.hpp"
 
 CleOClass CleO;

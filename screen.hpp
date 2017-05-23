@@ -1,7 +1,5 @@
 #ifndef SCREEN_H
-#define SCREEN_H
-
-//#include "CleO.hpp"
+#define SCREEN_H 1
 
 static const int long_press_threshold = 3;
 
@@ -213,7 +211,6 @@ void buildStatus (uint8_t fault)
     CleO.LineWidth(1);
     char temp = 'a';
     char* output_digit = &temp;
-//    char* output_str;
     char digit[1];
     char buf_on_off[15] = "OFF";
 
@@ -425,4 +422,4 @@ void updateScreen()
     //------------------------------------------------------------------------------------------------------------------
     CleO.Show();
 }
-#endif /* SCREEN_H */
+#endif // SCREEN_H

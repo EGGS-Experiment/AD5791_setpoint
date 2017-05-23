@@ -30,9 +30,44 @@
 extern "C" {
 #endif
   
-// debugging
-void spi_flex_debug(const int enabled);
+// SPI_FLEX_0 = CLEO
+#define SPI_FLEX_CLEO		0
 
+#define SPI_FLEX_0_CLK		PF3
+#define SPI_FLEX_0_CLK_PIN   	PINF
+#define SPI_FLEX_0_CLK_DDR   	DDRF
+#define SPI_FLEX_0_CLK_PORT  	PORTF
+
+#define SPI_FLEX_0_SDO		PF1
+#define SPI_FLEX_0_SDO_PIN   	PINF
+#define SPI_FLEX_0_SDO_DDR   	DDRF
+#define SPI_FLEX_0_SDO_PORT  	PORTF
+
+#define SPI_FLEX_0_nCS		PF0
+#define SPI_FLEX_0_nCS_PIN   	PINF
+#define SPI_FLEX_0_nCS_DDR   	DDRF
+#define SPI_FLEX_0_nCS_PORT  	PORTF
+
+#define SPI_FLEX_0_SDI		PF2
+#define SPI_FLEX_0_SDI_PIN   	PINF
+#define SPI_FLEX_0_SDI_DDR   	DDRF
+#define SPI_FLEX_0_SDI_PORT  	PORTF
+
+#define SPI_FLEX_0_nRS		PE7
+#define SPI_FLEX_0_nRS_PIN   	PINE
+#define SPI_FLEX_0_nRS_DDR   	DDRE
+#define SPI_FLEX_0_nRS_PORT  	PORTE
+
+#define SPI_FLEX_0_IRQ		PE6
+#define SPI_FLEX_0_IRQ_PIN   	PINE
+#define SPI_FLEX_0_IRQ_DDR   	DDRE
+#define SPI_FLEX_0_IRQ_PORT  	PORTE
+
+#define SPI_FLEX_0_PWR		PG0
+#define SPI_FLEX_0_PWR_PIN   	PING
+#define SPI_FLEX_0_PWR_DDR   	DDRG
+#define SPI_FLEX_0_PWR_PORT  	PORTG
+  
 // setup
 void spi_flex_init(const unsigned char spi_n);
 void spi_flex_reset(const unsigned char spi_n);
@@ -50,8 +85,8 @@ unsigned char spi_flex_read_byte(const unsigned char spi_n);
 // read & write byte starting with MSB
 unsigned char spi_flex_read_write_byte(const unsigned char spi_n, const unsigned char val);
 
-// check irq
-unsigned char spi_flex_irq(const unsigned char spi_n);
+// irq
+unsigned char spi_flex_read_irq(const unsigned char spi_n);
 
 #ifdef __cplusplus
 }

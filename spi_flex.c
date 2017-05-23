@@ -27,48 +27,6 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-// SPI_FLEX_0 = CLEO
-#define SPI_FLEX_0_CLK		PF3
-#define SPI_FLEX_0_CLK_PIN   	PINF
-#define SPI_FLEX_0_CLK_DDR   	DDRF
-#define SPI_FLEX_0_CLK_PORT  	PORTF
-
-#define SPI_FLEX_0_SDO		PF1
-#define SPI_FLEX_0_SDO_PIN   	PINF
-#define SPI_FLEX_0_SDO_DDR   	DDRF
-#define SPI_FLEX_0_SDO_PORT  	PORTF
-
-#define SPI_FLEX_0_nCS		PF0
-#define SPI_FLEX_0_nCS_PIN   	PINF
-#define SPI_FLEX_0_nCS_DDR   	DDRF
-#define SPI_FLEX_0_nCS_PORT  	PORTF
-
-#define SPI_FLEX_0_SDI		PF2
-#define SPI_FLEX_0_SDI_PIN   	PINF
-#define SPI_FLEX_0_SDI_DDR   	DDRF
-#define SPI_FLEX_0_SDI_PORT  	PORTF
-
-#define SPI_FLEX_0_nRS		PE7
-#define SPI_FLEX_0_nRS_PIN   	PINE
-#define SPI_FLEX_0_nRS_DDR   	DDRE
-#define SPI_FLEX_0_nRS_PORT  	PORTE
-
-#define SPI_FLEX_0_IRQ		PE6
-#define SPI_FLEX_0_IRQ_PIN   	PINE
-#define SPI_FLEX_0_IRQ_DDR   	DDRE
-#define SPI_FLEX_0_IRQ_PORT  	PORTE
-
-#define SPI_FLEX_0_PWR		PG0
-#define SPI_FLEX_0_PWR_PIN   	PING
-#define SPI_FLEX_0_PWR_DDR   	DDRG
-#define SPI_FLEX_0_PWR_PORT  	PORTG
-
-static int __spi_flex_debug = 0;
-
-void spi_flex_debug(const int enabled) {
-  __spi_flex_debug = enabled;
-}
-
 void spi_flex_init(const unsigned char spi_n) {
   if (spi_n == 0x00) { //SPI_MODE0
     SPI_FLEX_0_CLK_DDR  |=  _BV(SPI_FLEX_0_CLK); //output
@@ -94,12 +52,9 @@ void spi_flex_init(const unsigned char spi_n) {
     SPI_FLEX_0_IRQ_PORT &= ~_BV(SPI_FLEX_0_IRQ); //disable pullup
     
     SPI_FLEX_0_PWR_DDR  |=  _BV(SPI_FLEX_0_PWR); //output
-    //SPI_FLEX_0_PWR_PORT |=  _BV(SPI_FLEX_0_PWR); //1
     SPI_FLEX_0_PWR_PORT &= ~_BV(SPI_FLEX_0_PWR); //0
+    //SPI_FLEX_0_PWR_PORT |=  _BV(SPI_FLEX_0_PWR); //1
   }
-  
-  if (__spi_flex_debug)
-    printf("spi init 0x%x", spi_n);
 }
 
 void spi_flex_reset(const unsigned char spi_n) {
@@ -110,9 +65,6 @@ void spi_flex_reset(const unsigned char spi_n) {
     SPI_FLEX_0_nRS_PORT |=  _BV(SPI_FLEX_0_nRS); //0->1
     _delay_loop_1(1);
   }
-  
-  if (__spi_flex_debug)
-    printf("spi reset 0x%x", spi_n);
 }
 
 void spi_flex_chip_sel(const unsigned char spi_n) {
@@ -120,9 +72,6 @@ void spi_flex_chip_sel(const unsigned char spi_n) {
     SPI_FLEX_0_CLK_PORT &= ~_BV(SPI_FLEX_0_CLK); //0
     SPI_FLEX_0_nCS_PORT &= ~_BV(SPI_FLEX_0_nCS); //1->0
   }
-
-  if (__spi_flex_debug)
-    printf("spi chip sel 0x%x", spi_n);
 }
 
 void spi_flex_chip_usel(const unsigned char spi_n) {
@@ -131,9 +80,6 @@ void spi_flex_chip_usel(const unsigned char spi_n) {
     SPI_FLEX_0_CLK_PORT |=  _BV(SPI_FLEX_0_CLK); //1
     SPI_FLEX_0_SDO_PORT |=  _BV(SPI_FLEX_0_SDO); //1
   }
-  
-  if (__spi_flex_debug)
-    printf("spi chip usel 0x%x", spi_n);
 }
 
 static inline void __spi_flex_write_bit(const unsigned char spi_n, 
@@ -160,9 +106,6 @@ void spi_flex_write_byte(const unsigned char spi_n,
   __spi_flex_write_bit(spi_n, val & (0x01 << 2));
   __spi_flex_write_bit(spi_n, val & (0x01 << 1));
   __spi_flex_write_bit(spi_n, val & (0x01 << 0));
-
-  if (__spi_flex_debug)
-    printf("spi write 0x%x%x ", (val & 0xf0) >> 4, val & 0x0f);
 }
 
 static inline unsigned char __spi_flex_read_bit(const unsigned char spi_n) {
@@ -235,7 +178,7 @@ unsigned char spi_flex_read_write_byte(const unsigned char spi_n,
   return byte;
 }
 
-unsigned char spi_flex_irq(const unsigned char spi_n) {
+unsigned char spi_flex_read_irq(const unsigned char spi_n) {
   if (spi_n == 0x00) {
     return ((SPI_FLEX_0_IRQ_PIN >> SPI_FLEX_0_IRQ) & 0x01);
   }
