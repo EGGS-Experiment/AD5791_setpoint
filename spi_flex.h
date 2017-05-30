@@ -92,7 +92,7 @@ extern "C" {
 #define SPI_FLEX_02_DIS_PORT  	PORTA
 
 // SPI_FLEX_03
-#define SPI_FLEX_AMO1_OUT	0x03
+#define SPI_FLEX_AMO1_IOUT	0x03
 
 #define SPI_FLEX_03_CLK		PK2
 #define SPI_FLEX_03_CLK_PIN   	PINK

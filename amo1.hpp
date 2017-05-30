@@ -6,28 +6,28 @@
 //////////////////////////////////////////////////////////////////////////////////////
 
 // Core Variables & Constants
-#define AMO1_VDD1_EN		PK3
+#define AMO1_VDD1_EN		PK3   //17>K3
 #define AMO1_VDD1_EN_DDR   	DDRK
 #define AMO1_VDD1_EN_PORT  	PORTK
 AD5541 amo1_vdd1_dac(SPI_FLEX_AMO1_VDD1);
 
-#define AMO1_OUT_EN		PA7
+#define AMO1_OUT_EN		PA7   //05>A7
 #define AMO1_OUT_EN_DDR   	DDRA
 #define AMO1_OUT_EN_PORT  	PORTA
-AD5541 amo1_out_dac(SPI_FLEX_AMO1_OUT);
+AD5541 amo1_out_dac(SPI_FLEX_AMO1_IOUT);
 
-#define AMO1_IOUT               PK6
+#define AMO1_IOUT               PK6   //03>K6>ADC14
 #define AMO1_IOUT_DDR   	DDRK
 #define AMO1_IOUT_PORT  	PORTK
-#define AMO1_IOUT_ADMUX5_	0x00
-#define AMO1_IOUT_ADMUX40	0x1E
+#define AMO1_IOUT_ADMUX5_	0x08
+#define AMO1_IOUT_ADMUX40	0x06
 
-#define AMO1_VOUT               PK7
+#define AMO1_VOUT               PK7   //01>K7>ADC15
 #define AMO1_VOUT_PIN   	PINK
 #define AMO1_VOUT_DDR   	DDRK
 #define AMO1_VOUT_PORT  	PORTK
-#define AMO1_VOUT_ADMUX5_	0x00
-#define AMO1_VOUT_ADMUX40	0x1E
+#define AMO1_VOUT_ADMUX5_	0x08
+#define AMO1_VOUT_ADMUX40	0x07
 
 // |----------+----------+----------|
 // |  ADMUX5_ |  ADMUX40 | ADC MUX  |
@@ -41,6 +41,7 @@ AD5541 amo1_out_dac(SPI_FLEX_AMO1_OUT);
 // |   0x08   |   0x07   |  ADC15   |
 // |----------+----------+----------|
 
+float     amo1_adc_vref = 0.0;
 uint8_t   amo1_fault = 0;
 
 const uint32_t  amo1_iout_max_ua = 85000;
@@ -405,6 +406,7 @@ void amo1_initRead()
   
   // ADC Settings
   ADMUX |= _BV(REFS1) | _BV(REFS0); //Ref=2.56V
+  amo1_adc_vref = 2.56;
     // |-------+-------+-----------|
     // | REFS2 | REFS0 |  Ref Sel  |
     // |-------+-------+-----------|
@@ -416,7 +418,7 @@ void amo1_initRead()
     // |-------+-------+-----------|
     // |   1   |   1   |   2.56V   |
     // |-------+-------+-----------|
-  //ADMUX |= _BV(ADLAR); //result is left adjusted to 16bits
+  ADMUX |= _BV(ADLAR); //result is left adjusted to 16bits
   ADCSRA |= _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0); //16MHz/125=125kHz
     // |-------+-------+-------+------------|
     // | ADPS2 | ADPS1 | ADPS0 | Div Factor |
@@ -444,38 +446,22 @@ uint32_t amo1_readIOUTmA()
 {
   float read_value = 0;
   unsigned char i = 0;
-  //uint16_t read_adc = 0x003F;
   
   ADCSRB &= 0xF7;               //clear ADC MUX[5]
   ADMUX  &= 0xE0;               //clear ADC MUX[4:0]
-  ADCSRB |= AMO1_VOUT_ADMUX5_;  //select ADC MUX[5]
-  ADMUX  |= AMO1_VOUT_ADMUX40;  //select ADC MUX[4:0]
+  ADCSRB |= AMO1_IOUT_ADMUX5_;  //select ADC MUX[5]
+  ADMUX  |= AMO1_IOUT_ADMUX40;  //select ADC MUX[4:0]
   
   for (i=0;i<8;i++) {
     ADCSRA |= _BV(ADSC);          //start conversion
-    //while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
-    while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
-    ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
-    //read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
-    //read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
-    //read_value = ADC | 0x003F;
-    read_value = ADC;  
+    while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
+    //while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+    //ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
+    read_value = ADC | 0x003F;
   }
+  //printf("iout read_value = 0x%x\n", read_value);
   
-  /*
-  ADCSRA |= _BV(ADSC);          //start conversion
-  //while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
-  while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
-  ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
-  //read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
-  //read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
-  //read_value = ADC | 0x003F;
-  read_value = ADC;
-  */
-  
-  //read_value = (5.0*read_adc)/65536*1000*2/amo1_iout_res;
-  //printf("iout read_adc = 0x%x\n", read_adc);
-  //SerialUSB.println((float)(read_value),4);
+  //read_value = (amo1_adc_vref*read_value)/65536*1000*2/amo1_iout_res;
   amo1_iout_ma = read_value;
   if ((amo1_iout_ma*1000)>amo1_iout_max_ua) amo1_fault = 1;
   return read_value;
@@ -485,39 +471,22 @@ uint32_t amo1_readVOUTmV()
 {
   float read_value = 0;
   unsigned char i = 0;
-  //uint16_t read_adc = 0x003F;
   
   ADCSRB &= 0xF7;               //clear ADC MUX[5]
   ADMUX  &= 0xE0;               //clear ADC MUX[4:0]
-  ADCSRB |= AMO1_IOUT_ADMUX5_;  //select ADC MUX[5]
-  ADMUX  |= AMO1_IOUT_ADMUX40;  //select ADC MUX[4:0]
+  ADCSRB |= AMO1_VOUT_ADMUX5_;  //select ADC MUX[5]
+  ADMUX  |= AMO1_VOUT_ADMUX40;  //select ADC MUX[4:0]
   
-  for (i=0;i<1;i++) {
+  for (i=0;i<8;i++) {
     ADCSRA |= _BV(ADSC);          //start conversion
-    //while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
-    while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
-    ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
-    //read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
-    //read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
-    //read_value = ADC | 0x003F;
-    read_value = ADC;  
+    while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
+    //while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+    //ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
+    read_value = ADC | 0x003F;
   }
+  //printf("vout read_value = 0x%x\n", read_value);
   
-  /*
-  ADMUX  &= 0xE0;               //clear ADC channels
-  ADMUX  |= AMO1_VOUT_ADMUX;    //select ADC channel
-  ADCSRA |= _BV(ADSC);          //start conversion
-  while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
-  ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
-  read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
-  read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
-  read_value = read_adc;
-  */
-  
-  //read_value = (5.0*read_adc)/65536*1000*2;
-  //read_value = (3.3*analogRead(PIN_A0))/65536*1000*2;
-  //printf("vout read_adc = 0x%x\n", read_adc);
-  //SerialUSB.println((float)(read_value),4);
+  //read_value = (amo1_adc_vref*read_value)/65536*1000*2;
   amo1_vout_mv = read_value;
   return read_value;
 }
