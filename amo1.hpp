@@ -2,10 +2,76 @@
 #define AMO1_H 1
 
 //////////////////////////////////////////////////////////////////////////////////////
-// Constants
+// Variables & Constants
 //////////////////////////////////////////////////////////////////////////////////////
 
-// screen constants
+// Core Variables & Constants
+#define AMO1_VDD1_EN		PK3
+#define AMO1_VDD1_EN_DDR   	DDRK
+#define AMO1_VDD1_EN_PORT  	PORTK
+AD5541 amo1_vdd1_dac(SPI_FLEX_AMO1_VDD1);
+
+#define AMO1_OUT_EN		PA7
+#define AMO1_OUT_EN_DDR   	DDRA
+#define AMO1_OUT_EN_PORT  	PORTA
+AD5541 amo1_out_dac(SPI_FLEX_AMO1_OUT);
+
+#define AMO1_IOUT               PK6
+#define AMO1_IOUT_DDR   	DDRK
+#define AMO1_IOUT_PORT  	PORTK
+#define AMO1_IOUT_ADMUX5_	0x00
+#define AMO1_IOUT_ADMUX40	0x1E
+
+#define AMO1_VOUT               PK7
+#define AMO1_VOUT_PIN   	PINK
+#define AMO1_VOUT_DDR   	DDRK
+#define AMO1_VOUT_PORT  	PORTK
+#define AMO1_VOUT_ADMUX5_	0x00
+#define AMO1_VOUT_ADMUX40	0x1E
+
+// |----------+----------+----------|
+// |  ADMUX5_ |  ADMUX40 | ADC MUX  |
+// |----------+----------+----------|
+// |   0x00   |   0x1E   |   1.1V   |
+// |----------+----------+----------|
+// |   0x00   |   0x1F   |   GND    |
+// |----------+----------+----------|
+// |   0x08   |   0x06   |  ADC14   |
+// |----------+----------+----------|
+// |   0x08   |   0x07   |  ADC15   |
+// |----------+----------+----------|
+
+uint8_t   amo1_fault = 0;
+
+const uint32_t  amo1_iout_max_ua = 85000;
+const uint32_t  amo1_iout_max_set_ua = 80000;
+const float     amo1_iout_ua_to_cnts = 0.32071;
+const uint32_t  amo1_iout_res = 20;
+const uint32_t  amo1_iout_cnts = 65535;
+
+const uint32_t  amo1_vdd1_max_mv = 11000;
+const uint32_t  amo1_vdd1_min_mv = 5000;
+const float     amo1_vdd1_mv_to_cnts = 4.35;
+const uint32_t  amo1_vdd1_cnts = 65535;
+
+const uint32_t  amo1_pfet_iout_trig_ma = 20;  //prevent pfet correction when output is off
+
+const uint32_t  amo1_pfet_max_mw = 200;       //target pfet power when max_trig is trigged
+const uint32_t  amo1_pfet_max_trig_mw = 260;  //pfet power trigger, hysteresis = (amo1_pfet_max_trig_mw-amo1_pfet_max_mw) should be above the noise of system
+const uint8_t   amo1_pfet_pmax_trig_cnt_max = 2;
+uint8_t   amo1_pfet_pmax_trig_cnt = 0;
+
+const uint32_t  amo1_pfet_vdsmin_trig_mv = 1000; //pfet min voltage
+const uint8_t   amo1_pfet_vdsmin_trig_cnt_max = 2;
+uint8_t   amo1_pfet_vdsmin_trig_cnt = 0;
+
+uint32_t  amo1_vout_mv = 0;
+uint32_t  amo1_iout_ma = 0;
+bool      amo1_out_state = 0;
+uint32_t  amo1_prev_iout_ua = 0;
+uint32_t  amo1_prev_vdd1_mv = 0;
+
+// Screen Variables & Constants
 #define MY_ORANGE   0xfa7626UL
 #define MY_MAGENTA  0xff0086UL
 #define MY_RED      0xff6666UL
@@ -23,12 +89,6 @@
 #define AMO1_SCREEN_HEIGHT 320
 #define AMO1_SCREEN_NUM_OF_DIGITS 6
 
-//////////////////////////////////////////////////////////////////////////////////////
-// Variables
-//////////////////////////////////////////////////////////////////////////////////////
-const uint32_t amo1_iout_max_ua = 80000;
-
-// screen variables
 int amo1_screen_locationY[9] = {0, 40, 80, 120, 160 ,200 , 240, 280 , 320};
 int amo1_screen_locationX[15] = {0, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 480, 480};
 
@@ -64,12 +124,37 @@ bool amo1_screen_on = false;
 bool amo1_screen_toggle_on = true;
 
 //////////////////////////////////////////////////////////////////////////////////////
-// Member Functions: Declaration
+// Member Functions Declaration
 //////////////////////////////////////////////////////////////////////////////////////
-void amo1_init();
 
-// screen functions
+// Core Functions
+void amo1_init();
+void amo1_processFault(uint8_t fault);
+
+// VDD1 Write Functions
+void amo1_initVDD1();
+void amo1_adjVDD1();
+void amo1_VDD1(bool state);
+void amo1_setVDD1mV(uint32_t millivolts);
+uint16_t amo1_milliVoltsToCounts(uint32_t millivolts);
+void amo1_setVDD1cnts(uint16_t counts);
+
+// OUT Write Functions
+void amo1_initOUT();
+void amo1_setOUT(bool state, uint32_t microamps);
+void amo1_OUT(bool state);
+void amo1_setOUTuA(uint32_t microamps);
+uint16_t amo1_microAmpsToCounts(uint32_t microamps);
+void amo1_setOUTcnts(uint16_t counts);
+
+// Read Functions
+void amo1_initRead();
+uint32_t amo1_readIOUTmA();
+uint32_t amo1_readVOUTmV();
+
+// Screen Functions
 void amo1_screen_debug();
+void amo1_screen_processFault(uint8_t fault);
 
 void amo1_screen_refresh();
 void amo1_screen_draw(uint8_t fault);
@@ -84,11 +169,11 @@ void amo1_screen_decreaseSetCurrent(int i);
 bool amo1_screen_isOn();
 uint32_t amo1_screen_getCurrent();
 
-void amo1_screen_processFault(uint8_t fault);
+//////////////////////////////////////////////////////////////////////////////////////
+// Member Functions Implementation
+//////////////////////////////////////////////////////////////////////////////////////
 
-//////////////////////////////////////////////////////////////////////////////////////
-// Member Functions: Implementation
-//////////////////////////////////////////////////////////////////////////////////////
+// Core Functions
 void amo1_init()
 {
   // screen init
@@ -100,8 +185,344 @@ void amo1_init()
   CleO.Show();
   CleO.DisplayRotate(2, 0);
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
+  
+//  controller.setDO(0, 0);
+//  controller.setDO(1, 0);
+//  controller.enableDO(0);
+//  controller.enableDO(1);
+//  controller.setDO(0, 0);
+//  controller.setDO(1, 0);
+//  delay(1000); //wait for power to driver board to ramp up
+  
+  amo1_initVDD1();
+  amo1_initOUT();
+  amo1_initRead();
+//  amo1_OUT(0);
+//  amo1_VDD1(0);
+  
+  amo1_setVDD1mV(amo1_vdd1_min_mv);
+  amo1_VDD1(1);
+  amo1_setOUTuA(0);
+//  delay(1000); //wait for iout to settle before ramping up VDD1
+  amo1_setVDD1mV(amo1_vdd1_max_mv);
+  amo1_setOUTuA(0); //program one more time to be safe
 }
 
+void amo1_processFault(uint8_t fault)
+{
+  if (fault==1) { //high current
+    amo1_setOUTuA(0);
+//    delay(100);
+    amo1_OUT(0);
+    amo1_setVDD1mV(amo1_vdd1_max_mv);
+    amo1_out_state = 0;
+  }
+}
+
+// VDD1 Write Functions
+void amo1_initVDD1()
+{
+  amo1_vdd1_dac.init();
+  AMO1_VDD1_EN_DDR  |=  _BV(AMO1_VDD1_EN); //output
+  AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
+  //AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN; //1
+}
+
+void amo1_adjVDD1()
+{
+  uint32_t pfet_mw, pfet_mv;
+  int32_t vdd1_mv, pfet_dv_mv;
+  
+  amo1_readIOUTmA();
+  amo1_readVOUTmV();
+  pfet_mv = amo1_prev_vdd1_mv-amo1_iout_ma*amo1_iout_res-amo1_vout_mv;
+  pfet_mw = pfet_mv*amo1_iout_ma/1000;
+
+  if (amo1_iout_ma > amo1_pfet_iout_trig_ma) {
+    
+    // Check pfet power
+    if (pfet_mw > amo1_pfet_max_trig_mw) {
+      if (amo1_pfet_pmax_trig_cnt>=amo1_pfet_pmax_trig_cnt_max) {
+        pfet_dv_mv = ((pfet_mw-amo1_pfet_max_mw)*1000)/amo1_iout_ma;
+        vdd1_mv = amo1_prev_vdd1_mv-pfet_dv_mv;
+        if (vdd1_mv>0) {
+          amo1_setVDD1mV(vdd1_mv);
+          //SerialUSB.println("-- adjVDD1 > amo1_pfet_max_trig_mw > new vdd1 --");
+          //SerialUSB.println(amo1_iout_ma);
+          //SerialUSB.println(amo1_vout_mv);
+          //SerialUSB.println(pfet_mv);
+          //SerialUSB.println(pfet_mw);
+          //SerialUSB.println(pfet_dv_mv);
+          //SerialUSB.println(vdd1_mv);
+        }
+        amo1_pfet_pmax_trig_cnt=0;
+      }
+      else amo1_pfet_pmax_trig_cnt++;
+    }
+    else {
+      if (amo1_pfet_pmax_trig_cnt>0) amo1_pfet_pmax_trig_cnt--;
+    }
+    
+    // Check pfet vds voltage
+    if (pfet_mv<amo1_pfet_vdsmin_trig_mv) {
+      if (amo1_pfet_vdsmin_trig_cnt>=amo1_pfet_vdsmin_trig_cnt_max) {
+        //SerialUSB.println("-- adjVDD1 > amo1_pfet_vdsmin_trig_mv > new vdd1 --");
+        if (amo1_prev_vdd1_mv<amo1_vdd1_max_mv) amo1_setVDD1mV(amo1_vdd1_max_mv);
+        amo1_pfet_vdsmin_trig_cnt=0;
+      }
+      else amo1_pfet_vdsmin_trig_cnt++;
+    }
+    else {
+      if (amo1_pfet_vdsmin_trig_cnt>0) amo1_pfet_vdsmin_trig_cnt--;
+    }
+    
+  }
+  else {
+    if (amo1_pfet_pmax_trig_cnt>0)    amo1_pfet_pmax_trig_cnt--;
+    if (amo1_pfet_vdsmin_trig_cnt>0)  amo1_pfet_vdsmin_trig_cnt--;
+  }
+  //SerialUSB.println(amo1_vout_mv);
+  //SerialUSB.println(amo1_pfet_pmax_trig_cnt);
+  //SerialUSB.println(amo1_pfet_vdsmin_trig_cnt);
+}
+
+void amo1_VDD1(bool state)
+{
+  if (state)
+    AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN); //1
+  else
+    AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
+//  controller.setDO(1, state);
+}
+
+void amo1_setVDD1mV(uint32_t millivolts)
+{
+  uint16_t cnts = 0;
+  if      (millivolts>amo1_vdd1_max_mv) millivolts=amo1_vdd1_max_mv;
+  else if (millivolts<amo1_vdd1_min_mv) millivolts=amo1_vdd1_min_mv;
+  cnts = amo1_milliVoltsToCounts(millivolts);
+  amo1_setVDD1cnts(cnts);
+  amo1_prev_vdd1_mv=millivolts;
+}
+
+uint16_t amo1_milliVoltsToCounts(uint32_t millivolts)
+{
+  float cnts = 0;
+  cnts = amo1_vdd1_mv_to_cnts*millivolts;
+  if (cnts > amo1_vdd1_cnts) {
+    cnts = 0;
+  }
+  return cnts;
+}
+
+void amo1_setVDD1cnts(uint16_t counts)
+{
+  amo1_vdd1_dac.setCounts(counts);
+  //SerialUSB.println(counts);
+//  controller.writeDac2(counts);
+}
+
+// OUT Write Functions
+void amo1_initOUT()
+{
+  amo1_out_dac.init();
+  AMO1_OUT_EN_DDR  |=  _BV(AMO1_OUT_EN); //output
+  AMO1_OUT_EN_PORT &= ~_BV(AMO1_OUT_EN); //0
+  //AMO1_OUT_EN_PORT |=  _BV(AMO1_OUT_EN; //1
+}
+
+void amo1_setOUT(bool state, uint32_t microamps)
+{
+  if (amo1_out_state==0 && state==1) { //off -> on
+    amo1_OUT(1);
+    amo1_setOUTuA(microamps);
+    amo1_prev_iout_ua = microamps;
+    amo1_out_state = 1;
+//    delay(100);
+  }
+  else if (amo1_out_state==1 && state==0) { //on -> off
+    amo1_setOUTuA(0);
+//    delay(100);
+    amo1_OUT(0);
+    amo1_setVDD1mV(amo1_vdd1_max_mv);
+    amo1_out_state = 0;
+  }
+  else if (amo1_out_state==1 && state==1) { //on -> on
+    if (microamps!=amo1_prev_iout_ua) {
+      amo1_setOUTuA(microamps);
+      amo1_prev_iout_ua=microamps;
+    }
+  }
+}
+
+void amo1_OUT(bool state)
+{
+  if (state)
+    AMO1_OUT_EN_PORT |=  _BV(AMO1_OUT_EN); //1
+  else
+    AMO1_OUT_EN_PORT &= ~_BV(AMO1_OUT_EN); //0
+//  controller.setDO(0, state);
+}
+
+void amo1_setOUTuA(uint32_t microamps)
+{
+  uint16_t cnts = 0;
+  if (microamps>amo1_iout_max_set_ua) microamps=amo1_iout_max_set_ua;
+  cnts = amo1_microAmpsToCounts(microamps);
+  
+  amo1_setOUTcnts(cnts);
+}
+
+uint16_t amo1_microAmpsToCounts(uint32_t microamps)
+{
+  float cnts = 0;
+  cnts = amo1_iout_ua_to_cnts*microamps;
+  if (cnts > amo1_iout_cnts) cnts = 0;
+  //SerialUSB.println(cnts);
+  cnts = amo1_iout_cnts-cnts;
+  return cnts;
+}
+
+void amo1_setOUTcnts(uint16_t counts)
+{
+  amo1_out_dac.setCounts(counts);
+  //SerialUSB.println(counts);
+//  controller.writeDac1(counts);
+}
+
+// Read Functions
+void amo1_initRead()
+{
+  // IOUT
+  AMO1_IOUT_DDR  &= ~_BV(AMO1_IOUT); //input
+  AMO1_IOUT_PORT &= ~_BV(AMO1_IOUT); //disable pullup
+  //AMO1_IOUT_PORT |=  _BV(AMO1_IOUT); //enable pullup
+  
+  // VOUT
+  AMO1_VOUT_DDR  &= ~_BV(AMO1_VOUT); //input
+  AMO1_VOUT_PORT &= ~_BV(AMO1_VOUT); //disable pullup
+  //AMO1_VOUT_PORT |=  _BV(AMO1_VOUT); //enable pullup
+  
+  // ADC Settings
+  ADMUX |= _BV(REFS1) | _BV(REFS0); //Ref=2.56V
+    // |-------+-------+-----------|
+    // | REFS2 | REFS0 |  Ref Sel  |
+    // |-------+-------+-----------|
+    // |   0   |   0   |  Ext Ref  |
+    // |-------+-------+-----------|
+    // |   0   |   1   |   AVCC    |
+    // |-------+-------+-----------|
+    // |   1   |   0   |   1.10V   |
+    // |-------+-------+-----------|
+    // |   1   |   1   |   2.56V   |
+    // |-------+-------+-----------|
+  //ADMUX |= _BV(ADLAR); //result is left adjusted to 16bits
+  ADCSRA |= _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0); //16MHz/125=125kHz
+    // |-------+-------+-------+------------|
+    // | ADPS2 | ADPS1 | ADPS0 | Div Factor |
+    // |-------+-------+-------+------------|
+    // |   0   |   0   |   0   |     2      |
+    // |-------+-------+-------+------------|
+    // |   0   |   0   |   1   |     2      |
+    // |-------+-------+-------+------------|
+    // |   0   |   1   |   0   |     4      |
+    // |-------+-------+-------+------------|
+    // |   0   |   1   |   1   |     8      |
+    // |-------+-------+-------+------------|
+    // |   1   |   0   |   0   |     16     |
+    // |-------+-------+-------+------------|
+    // |   1   |   0   |   1   |     32     |
+    // |-------+-------+-------+------------|
+    // |   1   |   1   |   0   |     64     |
+    // |-------+-------+-------+------------|
+    // |   1   |   1   |   1   |     128    |
+    // |-------+-------+-------+------------|
+  ADCSRA |= _BV(ADEN); //enable ADC
+}
+
+uint32_t amo1_readIOUTmA()
+{
+  float read_value = 0;
+  unsigned char i = 0;
+  //uint16_t read_adc = 0x003F;
+  
+  ADCSRB &= 0xF7;               //clear ADC MUX[5]
+  ADMUX  &= 0xE0;               //clear ADC MUX[4:0]
+  ADCSRB |= AMO1_VOUT_ADMUX5_;  //select ADC MUX[5]
+  ADMUX  |= AMO1_VOUT_ADMUX40;  //select ADC MUX[4:0]
+  
+  for (i=0;i<8;i++) {
+    ADCSRA |= _BV(ADSC);          //start conversion
+    //while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
+    while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+    ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
+    //read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
+    //read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
+    //read_value = ADC | 0x003F;
+    read_value = ADC;  
+  }
+  
+  /*
+  ADCSRA |= _BV(ADSC);          //start conversion
+  //while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
+  while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+  ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
+  //read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
+  //read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
+  //read_value = ADC | 0x003F;
+  read_value = ADC;
+  */
+  
+  //read_value = (5.0*read_adc)/65536*1000*2/amo1_iout_res;
+  //printf("iout read_adc = 0x%x\n", read_adc);
+  //SerialUSB.println((float)(read_value),4);
+  amo1_iout_ma = read_value;
+  if ((amo1_iout_ma*1000)>amo1_iout_max_ua) amo1_fault = 1;
+  return read_value;
+}
+
+uint32_t amo1_readVOUTmV()
+{
+  float read_value = 0;
+  unsigned char i = 0;
+  //uint16_t read_adc = 0x003F;
+  
+  ADCSRB &= 0xF7;               //clear ADC MUX[5]
+  ADMUX  &= 0xE0;               //clear ADC MUX[4:0]
+  ADCSRB |= AMO1_IOUT_ADMUX5_;  //select ADC MUX[5]
+  ADMUX  |= AMO1_IOUT_ADMUX40;  //select ADC MUX[4:0]
+  
+  for (i=0;i<1;i++) {
+    ADCSRA |= _BV(ADSC);          //start conversion
+    //while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
+    while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+    ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
+    //read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
+    //read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
+    //read_value = ADC | 0x003F;
+    read_value = ADC;  
+  }
+  
+  /*
+  ADMUX  &= 0xE0;               //clear ADC channels
+  ADMUX  |= AMO1_VOUT_ADMUX;    //select ADC channel
+  ADCSRA |= _BV(ADSC);          //start conversion
+  while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+  ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
+  read_adc |= ADCL;             //read lower byte of ADC Data Register and must be read first
+  read_adc |= (ADCH << 8);      //read upper byte of ADC Data Register
+  read_value = read_adc;
+  */
+  
+  //read_value = (5.0*read_adc)/65536*1000*2;
+  //read_value = (3.3*analogRead(PIN_A0))/65536*1000*2;
+  //printf("vout read_adc = 0x%x\n", read_adc);
+  //SerialUSB.println((float)(read_value),4);
+  amo1_vout_mv = read_value;
+  return read_value;
+}
+
+// Screen Functions
 void amo1_screen_debug()
 {
   printf("CleO Version = %d\n", CleO.Version());
@@ -110,6 +531,18 @@ void amo1_screen_debug()
   printf("CleO Noop() Echo = %d\n", CleO.Echo());
   //printf("spi_flex_read_byte = 0x%x\n", spi_flex_read_byte(0));
   //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
+}
+
+void amo1_screen_processFault(uint8_t fault)
+{
+  if (fault==1) {
+    amo1_screen_on = 0;
+  }
+  CleO.Start();
+  CleO.RectangleJustification(MM);
+  CleO.LineColor(amo1_screen_line_color);
+  amo1_screen_draw(fault);
+  CleO.Show();
 }
 
 void amo1_screen_refresh()
@@ -173,7 +606,7 @@ void amo1_screen_draw(uint8_t fault)
     CleO.RectangleColor(amo1_screen_on ? MY_GREEN : MY_RED);
     CleO.RectangleXY(240, 280, AMO1_SCREEN_WIDTH, 80);
     if (amo1_screen_on) {
-//      sprintf(buf_on_off, "%1lu.%03luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
+      sprintf(buf_on_off, "%1lu.%03luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
     }
     else if (fault == 1) {
       sprintf(buf_on_off, "%s", "Current Fault!");
@@ -321,7 +754,7 @@ void amo1_screen_increaseSetCurrent(int i)
         amo1_screen_increaseSetCurrent(i + 1);
     }
 	
-    if (amo1_screen_getCurrent() > amo1_iout_max_ua) {
+    if (amo1_screen_getCurrent() > amo1_iout_max_set_ua) {
       amo1_screen_current[0]=0;
       amo1_screen_current[1]=0;
       amo1_screen_current[2]=0;
@@ -366,16 +799,68 @@ uint32_t amo1_screen_getCurrent()
     return total;
 }
 
-void amo1_screen_processFault(uint8_t fault)
+/*
+void amo1_parseInput(String input)
 {
-  if (fault==1) {
-    amo1_screen_on = 0;
-  }
-  CleO.Start();
-  CleO.RectangleJustification(MM);
-  CleO.LineColor(amo1_screen_line_color);
-  amo1_screen_draw(fault);
-  CleO.Show();
-}
+  String cmd, data, len;
+  input.trim();
+  //input.toLowerCase();
+  len = input.length();
 
+  // Check length
+  if (len.toInt()>3) {
+    cmd = input.substring(0,4);
+    cmd.trim();
+    data = input.substring(4);
+    data.trim();
+  }
+  else {
+    SerialUSB.println("Invalid Input");
+  }
+
+  // Parse commands
+  if (cmd == "read") {
+    SerialUSB.println("read");
+    SerialUSB.println(amo1_readIOUTmA());
+    SerialUSB.println(amo1_readVOUTmV());
+  }
+  else if (cmd == "iout") {
+    if (data == "off") {
+      SerialUSB.println("iout>off");
+      amo1_OUT(0);
+    }
+    else if (data == "on") {
+      SerialUSB.println("iout>on");
+      amo1_OUT(1);
+    }
+    else if (data == "read") {
+      SerialUSB.println("iout>read");
+      SerialUSB.println(amo1_readIOUTmA());
+      SerialUSB.println(amo1_readVOUTmV());
+    }
+    else {
+      SerialUSB.println("iout>data");
+      amo1_setOUTuA(data.toInt());
+    }
+  }
+  else if (cmd == "vdd1") {
+    if (data == "off") {
+      SerialUSB.println("vdd1>off");
+      amo1_VDD1(0);
+    }
+    else if (data == "on") {
+      SerialUSB.println("vdd1>on");
+      amo1_VDD1(1);
+    }
+    else {
+      SerialUSB.println("vdd1>data");
+      amo1_setVDD1mV(data.toInt());
+    }
+  }
+  else
+  {
+    SerialUSB.println("Invalid Command");
+  }
+}
+*/
 #endif // AMO1_H

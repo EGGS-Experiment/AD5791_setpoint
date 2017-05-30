@@ -18,9 +18,9 @@ extern uint8_t *addstr(uint8_t *pc, const char *s);
 class CleOClass
 {
 public:
-    CleOClass()
-    {
-    }
+  CleOClass()
+  {
+  }
 
   int begin(void) {
     spi_flex_init(SPI_FLEX_CLEO);
@@ -45,11 +45,11 @@ public:
 private:
 
   void sel(void) {
-    spi_flex_chip_sel(SPI_FLEX_CLEO);
+    spi_flex_sel(SPI_FLEX_CLEO);
   }
 
   void unsel(void) {
-    spi_flex_chip_usel(SPI_FLEX_CLEO);
+    spi_flex_usel(SPI_FLEX_CLEO);
   }
 
   union {

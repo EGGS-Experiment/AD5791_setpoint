@@ -30,6 +30,7 @@
 #include "spi_flex.h"
 
 #include "CleO.hpp"
+#include "ad5541.hpp"
 #include "amo1.hpp"
 
 int main(void) {
@@ -69,6 +70,8 @@ int main(void) {
   // echo
   //char c;
   int counter=0;
+  //char string[33];
+  //int readcnt=0;
   for (;;) {
     /*
     c = getchar();
@@ -80,8 +83,20 @@ int main(void) {
     if (c == '0') {
       led_off();
     }*/
-    if (counter%10==0) {
+    
+    /*
+    if (counter%100==0) {
+      readcnt = scanf("%s", string);
+      printf("read=%d, %s\n", readcnt, string);
+    }
+    */
+    
+    if (counter%2000==0) {
       amo1_screen_refresh();
+    }
+    if (counter%20000==0) {
+      amo1_readIOUTmA();
+      //amo1_readVOUTmV();
     }
     counter++;
   }
