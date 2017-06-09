@@ -610,7 +610,8 @@ void amo1_screen_draw()
     CleO.RectangleColor(amo1_screen_on ? MY_GREEN : MY_RED);
     CleO.RectangleXY(240, 280, AMO1_SCREEN_WIDTH, 80);
     if (amo1_screen_on) {
-      sprintf(buf_on_off, "%1lu.%03luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
+      //sprintf(buf_on_off, "%1lu.%02luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
+      sprintf(buf_on_off, "%0.2fV, %lumA", amo1_vout_mv/1000.0, amo1_iout_ma);
     }
     else if (amo1_fault == 1) {
       sprintf(buf_on_off, "%s", "Current Fault !");

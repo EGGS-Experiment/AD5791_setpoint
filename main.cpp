@@ -75,7 +75,7 @@ int main(void) {
   //char string[33];
   //int readcnt=0;
   
-  int  counter=0;
+  uint16_t counter=0;
   bool no_op=1;
   for (;;) {
     /*
