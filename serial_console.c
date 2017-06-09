@@ -96,6 +96,22 @@ char uart_getchar(FILE *stream) {
   return c;
 }
 
+char uart_trygetchar() {
+  // wait until buffer contains data (no need for atomic because of char)
+  //while (num_bytes == 0);
+  if (num_bytes == 0) {
+    return 0;
+  }
+  
+  char c = serial_buffer[pos_r];
+  num_bytes--;
+  pos_r++;
+  if (pos_r == SERIAL_BUFFER_SIZE)
+    pos_r = 0;
+
+  return c;
+}
+
 #else  // SERIAL_RX_INTERRUPT
 
 char uart_getchar(FILE *stream) {

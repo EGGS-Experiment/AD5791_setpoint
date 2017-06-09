@@ -24,6 +24,7 @@
 #include "config.h"
 #include <stdio.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 
 #include "serial_console.h"
 #include "led.h"
@@ -37,7 +38,7 @@ int main(void) {
   // ////////////////////////////////////////////////////////////////////////
   // initialization
   // ////////////////////////////////////////////////////////////////////////
-
+  
   // LED
   led_init();
 
@@ -69,35 +70,48 @@ int main(void) {
   
   // echo
   //char c;
-  int counter=0;
+  
+  // serial
   //char string[33];
   //int readcnt=0;
+  
+  int  counter=0;
+  bool no_op=1;
   for (;;) {
     /*
     c = getchar();
     putchar(c);
 
     if (c == '1') {
-      led_on();
+      amo1_setVDD1cnts(0);
+      led_blink(1);
     }
-    if (c == '0') {
-      led_off();
-    }*/
-    
-    /*
-    if (counter%100==0) {
-      readcnt = scanf("%s", string);
-      printf("read=%d, %s\n", readcnt, string);
+    if (c == '2') {
+      amo1_setVDD1cnts(amo1_vdd1_cnts);
+      led_blink(2);
+    }
+    if (c == '3') {
+      amo1_setVDD1cnts(47850);
+      led_blink(3);
     }
     */
     
-    if (counter%2000==0) {
+    if (counter%100==0) {
+      amo1_adjVDD1();
+      amo1_processFault();
+      no_op=0;
+    }
+    if (counter%50==0) {
+      amo1_setOUT();
+      no_op=0;
+    }
+    if (counter%20==0) {
       amo1_screen_refresh();
+      no_op=0;
     }
-    if (counter%20000==0) {
-      amo1_readIOUTmA();
-      amo1_readVOUTmV();
-    }
+    
+    if (no_op) _delay_ms(1);
+    else       no_op=1;
     counter++;
   }
 

@@ -6,6 +6,14 @@
 //////////////////////////////////////////////////////////////////////////////////////
 
 // Core Variables & Constants
+#define AMO6_CLEO_EN		PG0
+#define AMO6_CLEO_EN_DDR   	DDRG
+#define AMO6_CLEO_EN_PORT  	PORTG
+
+#define AMO6_EXT1_EN		PG1
+#define AMO6_EXT1_EN_DDR   	DDRG
+#define AMO6_EXT1_EN_PORT  	PORTG
+
 #define AMO1_VDD1_EN		PK3   //17>K3
 #define AMO1_VDD1_EN_DDR   	DDRK
 #define AMO1_VDD1_EN_PORT  	PORTK
@@ -41,8 +49,24 @@ AD5541 amo1_out_dac(SPI_FLEX_AMO1_IOUT);
 // |   0x08   |   0x07   |  ADC15   |
 // |----------+----------+----------|
 
-float     amo1_adc_vref = 0.0;
+#define AMO1_OUT_FET		PA6   //06>A6
+#define AMO1_OUT_FET_DDR   	DDRA
+#define AMO1_OUT_FET_PORT  	PORTA
+
+#define AMO1_D1_4		PA0   //19>A0
+#define AMO1_D1_4_DDR   	DDRA
+#define AMO1_D1_4_PORT  	PORTA
+
+#define AMO1_D2_4		PA4   //09>A4
+#define AMO1_D2_4_DDR   	DDRA
+#define AMO1_D2_4_PORT  	PORTA
+
 uint8_t   amo1_fault = 0;
+
+const uint32_t  amo1_vdd1_max_mv = 11000;
+const uint32_t  amo1_vdd1_min_mv = 5000;
+const float     amo1_vdd1_mv_to_cnts = 4.35;
+const uint32_t  amo1_vdd1_cnts = 65535;
 
 const uint32_t  amo1_iout_max_ua = 85000;
 const uint32_t  amo1_iout_max_set_ua = 80000;
@@ -50,21 +74,20 @@ const float     amo1_iout_ua_to_cnts = 0.32071;
 const uint32_t  amo1_iout_res = 20;
 const uint32_t  amo1_iout_cnts = 65535;
 
-const uint32_t  amo1_vdd1_max_mv = 11000;
-const uint32_t  amo1_vdd1_min_mv = 5000;
-const float     amo1_vdd1_mv_to_cnts = 4.35;
-const uint32_t  amo1_vdd1_cnts = 65535;
-
 const uint32_t  amo1_pfet_iout_trig_ma = 20;  //prevent pfet correction when output is off
 
 const uint32_t  amo1_pfet_max_mw = 200;       //target pfet power when max_trig is trigged
 const uint32_t  amo1_pfet_max_trig_mw = 260;  //pfet power trigger, hysteresis = (amo1_pfet_max_trig_mw-amo1_pfet_max_mw) should be above the noise of system
 const uint8_t   amo1_pfet_pmax_trig_cnt_max = 2;
-uint8_t   amo1_pfet_pmax_trig_cnt = 0;
+uint8_t         amo1_pfet_pmax_trig_cnt = 0;
 
 const uint32_t  amo1_pfet_vdsmin_trig_mv = 1000; //pfet min voltage
 const uint8_t   amo1_pfet_vdsmin_trig_cnt_max = 2;
-uint8_t   amo1_pfet_vdsmin_trig_cnt = 0;
+uint8_t         amo1_pfet_vdsmin_trig_cnt = 0;
+
+float     amo1_adc_vref = 0.0;
+float     amo1_vout_cnts_to_mv = 0.106813;
+float     amo1_iout_cnts_to_mv = 0.005341;
 
 uint32_t  amo1_vout_mv = 0;
 uint32_t  amo1_iout_ma = 0;
@@ -130,9 +153,9 @@ bool amo1_screen_toggle_on = true;
 
 // Core Functions
 void amo1_init();
-void amo1_processFault(uint8_t fault);
+void amo1_processFault();
 
-// VDD1 Write Functions
+// VDD1 DAC Functions
 void amo1_initVDD1();
 void amo1_adjVDD1();
 void amo1_VDD1(bool state);
@@ -140,9 +163,10 @@ void amo1_setVDD1mV(uint32_t millivolts);
 uint16_t amo1_milliVoltsToCounts(uint32_t millivolts);
 void amo1_setVDD1cnts(uint16_t counts);
 
-// OUT Write Functions
+// OUT DAC Functions
 void amo1_initOUT();
-void amo1_setOUT(bool state, uint32_t microamps);
+//void amo1_setOUT(bool state, uint32_t microamps);
+void amo1_setOUT();
 void amo1_OUT(bool state);
 void amo1_setOUTuA(uint32_t microamps);
 uint16_t amo1_microAmpsToCounts(uint32_t microamps);
@@ -155,10 +179,10 @@ uint32_t amo1_readVOUTmV();
 
 // Screen Functions
 void amo1_screen_debug();
-void amo1_screen_processFault(uint8_t fault);
+void amo1_screen_processFault();
 
 void amo1_screen_refresh();
-void amo1_screen_draw(uint8_t fault);
+void amo1_screen_draw();
 
 void amo1_screen_processButtons();
 void amo1_screen_shortPress (bool *press_detected);
@@ -177,6 +201,15 @@ uint32_t amo1_screen_getCurrent();
 // Core Functions
 void amo1_init()
 {
+  AMO6_CLEO_EN_DDR  |=  _BV(AMO6_CLEO_EN); //output
+  AMO6_CLEO_EN_PORT &= ~_BV(AMO6_CLEO_EN); //0
+  AMO6_EXT1_EN_DDR  |=  _BV(AMO6_EXT1_EN); //output
+  AMO6_EXT1_EN_PORT &= ~_BV(AMO6_EXT1_EN); //0
+  
+  amo1_initVDD1();
+  amo1_initOUT();
+  amo1_initRead();
+  
   // screen init
   CleO.begin();
   CleO.Display(100);
@@ -187,37 +220,36 @@ void amo1_init()
   CleO.DisplayRotate(2, 0);
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
   
-//  controller.setDO(0, 0);
-//  controller.setDO(1, 0);
-//  controller.enableDO(0);
-//  controller.enableDO(1);
-//  controller.setDO(0, 0);
-//  controller.setDO(1, 0);
-//  delay(1000); //wait for power to driver board to ramp up
-  
-  amo1_initVDD1();
-  amo1_initOUT();
-  amo1_initRead();
-//  amo1_OUT(0);
-//  amo1_VDD1(0);
+  _delay_ms(1000); //wait for power to driver board to ramp up
   
   amo1_setVDD1mV(amo1_vdd1_min_mv);
   amo1_VDD1(1);
   amo1_setOUTuA(0);
-//  delay(1000); //wait for iout to settle before ramping up VDD1
+  _delay_ms(1000); //wait for iout to settle before ramping up VDD1
   amo1_setVDD1mV(amo1_vdd1_max_mv);
   amo1_setOUTuA(0); //program one more time to be safe
+  
+  AMO1_OUT_FET_DDR  |=  _BV(AMO1_OUT_FET); //output
+  AMO1_OUT_FET_PORT &= ~_BV(AMO1_OUT_FET); //0
+  AMO1_D1_4_DDR  |=  _BV(AMO1_D1_4); //output
+  AMO1_D1_4_PORT |=  _BV(AMO1_D1_4); //1
+  AMO1_D2_4_DDR  |=  _BV(AMO1_D2_4); //output
+  AMO1_D2_4_PORT |=  _BV(AMO1_D2_4); //1
 }
 
-void amo1_processFault(uint8_t fault)
+void amo1_processFault()
 {
-  if (fault==1) { //high current
+  uint16_t i;
+  if (amo1_fault==1) { //high current
     amo1_setOUTuA(0);
-//    delay(100);
+    _delay_ms(100);
     amo1_OUT(0);
     amo1_setVDD1mV(amo1_vdd1_max_mv);
     amo1_out_state = 0;
+    amo1_screen_processFault();
+    for(i=0;i<10;i++) _delay_ms(1000);
   }
+  amo1_fault = 0;
 }
 
 // VDD1 Write Functions
@@ -226,7 +258,8 @@ void amo1_initVDD1()
   amo1_vdd1_dac.init();
   AMO1_VDD1_EN_DDR  |=  _BV(AMO1_VDD1_EN); //output
   AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
-  //AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN; //1
+  //AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN); //1
+  
 }
 
 void amo1_adjVDD1()
@@ -289,10 +322,8 @@ void amo1_adjVDD1()
 
 void amo1_VDD1(bool state)
 {
-  if (state)
-    AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN); //1
-  else
-    AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
+  if (state) AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN); //1
+  else       AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
 //  controller.setDO(1, state);
 }
 
@@ -329,26 +360,30 @@ void amo1_initOUT()
   amo1_out_dac.init();
   AMO1_OUT_EN_DDR  |=  _BV(AMO1_OUT_EN); //output
   AMO1_OUT_EN_PORT &= ~_BV(AMO1_OUT_EN); //0
-  //AMO1_OUT_EN_PORT |=  _BV(AMO1_OUT_EN; //1
+  //AMO1_OUT_EN_PORT |=  _BV(AMO1_OUT_EN); //1
 }
 
-void amo1_setOUT(bool state, uint32_t microamps)
+//void amo1_setOUT(bool state, uint32_t microamps)
+void amo1_setOUT()
 {
-  if (amo1_out_state==0 && state==1) { //off -> on
+  uint32_t microamps = amo1_screen_getCurrent();
+  if (amo1_out_state==0 && amo1_screen_on==1) { //off -> on
     amo1_OUT(1);
     amo1_setOUTuA(microamps);
     amo1_prev_iout_ua = microamps;
     amo1_out_state = 1;
+    _delay_ms(100);
 //    delay(100);
   }
-  else if (amo1_out_state==1 && state==0) { //on -> off
+  else if (amo1_out_state==1 && amo1_screen_on==0) { //on -> off
     amo1_setOUTuA(0);
+    _delay_ms(100);
 //    delay(100);
     amo1_OUT(0);
     amo1_setVDD1mV(amo1_vdd1_max_mv);
     amo1_out_state = 0;
   }
-  else if (amo1_out_state==1 && state==1) { //on -> on
+  else if (amo1_out_state==1 && amo1_screen_on==1) { //on -> on
     if (microamps!=amo1_prev_iout_ua) {
       amo1_setOUTuA(microamps);
       amo1_prev_iout_ua=microamps;
@@ -455,13 +490,13 @@ uint32_t amo1_readIOUTmA()
   for (i=0;i<8;i++) {
     ADCSRA |= _BV(ADSC);          //start conversion
     while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
-    //while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+    //while(!(ADCSRA & _BV(ADIF))); //wait for ADC Interrupt Flag to complete
     //ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
     read_value = ADC | 0x003F;
   }
   //printf("iout read_value = 0x%x\n", read_value);
   
-  //read_value = (amo1_adc_vref*read_value)/65536*1000*2/amo1_iout_res;
+  read_value = amo1_iout_cnts_to_mv*read_value;
   amo1_iout_ma = read_value;
   if ((amo1_iout_ma*1000)>amo1_iout_max_ua) amo1_fault = 1;
   return read_value;
@@ -480,13 +515,13 @@ uint32_t amo1_readVOUTmV()
   for (i=0;i<8;i++) {
     ADCSRA |= _BV(ADSC);          //start conversion
     while((ADCSRA & _BV(ADSC)));  //wait for conversion to complete
-    //while(!(ADCSRA & _BV(ADIF))); //wait for conversion to complete
+    //while(!(ADCSRA & _BV(ADIF))); //wait for ADC Interrupt Flag to complete
     //ADCSRA |= _BV(ADIF);          //clear ADC Interrupt Flag
     read_value = ADC | 0x003F;
   }
   //printf("vout read_value = 0x%x\n", read_value);
   
-  //read_value = (amo1_adc_vref*read_value)/65536*1000*2;
+  read_value = amo1_vout_cnts_to_mv*read_value;
   amo1_vout_mv = read_value;
   return read_value;
 }
@@ -502,15 +537,15 @@ void amo1_screen_debug()
   //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
 }
 
-void amo1_screen_processFault(uint8_t fault)
+void amo1_screen_processFault()
 {
-  if (fault==1) {
+  if (amo1_fault==1) {
     amo1_screen_on = 0;
   }
   CleO.Start();
   CleO.RectangleJustification(MM);
   CleO.LineColor(amo1_screen_line_color);
-  amo1_screen_draw(fault);
+  amo1_screen_draw();
   CleO.Show();
 }
 
@@ -526,7 +561,7 @@ void amo1_screen_refresh()
     //------------------------------------------------------------------------------------------------------------------
     CleO.RectangleJustification(MM);
     CleO.LineColor(amo1_screen_line_color);
-    amo1_screen_draw(0);
+    amo1_screen_draw();
 
     //------------------------------------------------------------------------------------------------------------------
     // Collect Tags
@@ -540,7 +575,7 @@ void amo1_screen_refresh()
     CleO.Show();
 }
 
-void amo1_screen_draw(uint8_t fault)
+void amo1_screen_draw()
 {
     int x_offset = AMO1_SCREEN_WIDTH/2 -60;
 
@@ -577,8 +612,8 @@ void amo1_screen_draw(uint8_t fault)
     if (amo1_screen_on) {
       sprintf(buf_on_off, "%1lu.%03luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
     }
-    else if (fault == 1) {
-      sprintf(buf_on_off, "%s", "Current Fault!");
+    else if (amo1_fault == 1) {
+      sprintf(buf_on_off, "%s", "Current Fault !");
     }
     CleO.StringExt(FONT_SANS_4 , 60 + x_offset , 280 , amo1_screen_text_color , MM , 0 , 0, buf_on_off);
     //CleO.Tag(0);
