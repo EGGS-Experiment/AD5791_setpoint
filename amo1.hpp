@@ -6,9 +6,9 @@
 //////////////////////////////////////////////////////////////////////////////////////
 
 // Core Variables & Constants
-#define AMO6_CLEO_EN		PG0
-#define AMO6_CLEO_EN_DDR   	DDRG
-#define AMO6_CLEO_EN_PORT  	PORTG
+#define AMO6_CLEO_PWR		PG0
+#define AMO6_CLEO_PWR_DDR	DDRG
+#define AMO6_CLEO_PWR_PORT	PORTG
 
 #define AMO6_EXT1_EN		PG1
 #define AMO6_EXT1_EN_DDR   	DDRG
@@ -201,13 +201,15 @@ uint32_t amo1_screen_getCurrent();
 // Core Functions
 void amo1_init()
 {
-  AMO6_CLEO_EN_DDR  |=  _BV(AMO6_CLEO_EN); //output
-  AMO6_CLEO_EN_PORT &= ~_BV(AMO6_CLEO_EN); //0
+  // AMO6 init
+  AMO6_CLEO_PWR_DDR  |=  _BV(AMO6_CLEO_PWR);//output
+  AMO6_CLEO_PWR_PORT |=  _BV(AMO6_CLEO_PWR); //1
   AMO6_EXT1_EN_DDR  |=  _BV(AMO6_EXT1_EN); //output
   AMO6_EXT1_EN_PORT &= ~_BV(AMO6_EXT1_EN); //0
   
-  amo1_initVDD1();
+  // AMO1 init
   amo1_initOUT();
+  amo1_initVDD1();
   amo1_initRead();
   
   // screen init
@@ -220,8 +222,7 @@ void amo1_init()
   CleO.DisplayRotate(2, 0);
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
   
-  _delay_ms(1000); //wait for power to driver board to ramp up
-  
+  // AMO1 init setup
   amo1_setVDD1mV(amo1_vdd1_min_mv);
   amo1_VDD1(1);
   amo1_setOUTuA(0);
@@ -229,6 +230,7 @@ void amo1_init()
   amo1_setVDD1mV(amo1_vdd1_max_mv);
   amo1_setOUTuA(0); //program one more time to be safe
   
+  // AMO1 unused pins
   AMO1_OUT_FET_DDR  |=  _BV(AMO1_OUT_FET); //output
   AMO1_OUT_FET_PORT &= ~_BV(AMO1_OUT_FET); //0
   AMO1_D1_4_DDR  |=  _BV(AMO1_D1_4); //output
@@ -255,10 +257,10 @@ void amo1_processFault()
 // VDD1 Write Functions
 void amo1_initVDD1()
 {
-  amo1_vdd1_dac.init();
   AMO1_VDD1_EN_DDR  |=  _BV(AMO1_VDD1_EN); //output
   AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
   //AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN); //1
+  amo1_vdd1_dac.init();
   
 }
 
@@ -357,10 +359,10 @@ void amo1_setVDD1cnts(uint16_t counts)
 // OUT Write Functions
 void amo1_initOUT()
 {
-  amo1_out_dac.init();
   AMO1_OUT_EN_DDR  |=  _BV(AMO1_OUT_EN); //output
   AMO1_OUT_EN_PORT &= ~_BV(AMO1_OUT_EN); //0
   //AMO1_OUT_EN_PORT |=  _BV(AMO1_OUT_EN); //1
+  amo1_out_dac.init();
 }
 
 //void amo1_setOUT(bool state, uint32_t microamps)

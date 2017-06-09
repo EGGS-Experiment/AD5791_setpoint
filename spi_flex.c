@@ -30,9 +30,11 @@
 void spi_flex_init(const unsigned char spi_n) {
   if (spi_n == SPI_FLEX_CLEO) { //0x01, SPI_MODE0
     SPI_FLEX_01_PWR_DDR  |=  _BV(SPI_FLEX_01_PWR); //output
+    SPI_FLEX_01_PWR_PORT |=  _BV(SPI_FLEX_01_PWR); //1
+    _delay_ms(1000);
     SPI_FLEX_01_PWR_PORT &= ~_BV(SPI_FLEX_01_PWR); //0
-    //SPI_FLEX_01_PWR_PORT |=  _BV(SPI_FLEX_01_PWR); //1
-	
+    _delay_ms(1000);
+    
     SPI_FLEX_01_nCS_DDR  |=  _BV(SPI_FLEX_01_nCS); //output
     SPI_FLEX_01_nCS_PORT |=  _BV(SPI_FLEX_01_nCS); //1
     //SPI_FLEX_01_nCS_PORT &= ~_BV(SPI_FLEX_01_nCS); //0
@@ -59,6 +61,7 @@ void spi_flex_init(const unsigned char spi_n) {
     SPI_FLEX_02_DIS_DDR  |=  _BV(SPI_FLEX_02_DIS); //output
     //SPI_FLEX_02_DIS_PORT |=  _BV(SPI_FLEX_02_DIS); //1
     SPI_FLEX_02_DIS_PORT &= ~_BV(SPI_FLEX_02_DIS); //0
+    _delay_ms(100);
 	
     SPI_FLEX_02_nCS_DDR  |=  _BV(SPI_FLEX_02_nCS); //output
     SPI_FLEX_02_nCS_PORT |=  _BV(SPI_FLEX_02_nCS); //1
@@ -76,6 +79,7 @@ void spi_flex_init(const unsigned char spi_n) {
     SPI_FLEX_03_DIS_DDR  |=  _BV(SPI_FLEX_03_DIS); //output
     //SPI_FLEX_03_DIS_PORT |=  _BV(SPI_FLEX_03_DIS); //1
     SPI_FLEX_03_DIS_PORT &= ~_BV(SPI_FLEX_03_DIS); //0
+    _delay_ms(100);
    
     SPI_FLEX_03_nCS_DDR  |=  _BV(SPI_FLEX_03_nCS); //output
     SPI_FLEX_03_nCS_PORT |=  _BV(SPI_FLEX_03_nCS); //1
