@@ -68,8 +68,8 @@ const uint32_t  amo1_vdd1_min_mv = 5000;
 const float     amo1_vdd1_mv_to_cnts = 4.35;
 const uint32_t  amo1_vdd1_cnts = 65535;
 
-const uint32_t  amo1_iout_max_ua = 85000;
-const uint32_t  amo1_iout_max_set_ua = 80000;
+const uint32_t  amo1_iout_max_ua = 250000;
+const uint32_t  amo1_iout_max_set_ua = 200000;
 const float     amo1_iout_ua_to_cnts = 0.32071;
 const uint32_t  amo1_iout_res = 20;
 const uint32_t  amo1_iout_cnts = 65535;
@@ -179,7 +179,6 @@ uint32_t amo1_readVOUTmV();
 
 // Screen Functions
 void amo1_screen_debug();
-void amo1_screen_processFault();
 
 void amo1_screen_refresh();
 void amo1_screen_draw();
@@ -241,15 +240,30 @@ void amo1_init()
 
 void amo1_processFault()
 {
+  if ((amo1_iout_ma*1000)>amo1_iout_max_ua) amo1_fault = 1;
+  else if((amo1_vout_mv > 6990) && (amo1_iout_ma < 10)) amo1_fault = 2;
+  else amo1_fault = 0;
+  
   uint16_t i;
-  if (amo1_fault==1) { //high current
+  if (amo1_fault==1) { //max current fault
     amo1_setOUTuA(0);
     _delay_ms(100);
     amo1_OUT(0);
     amo1_setVDD1mV(amo1_vdd1_max_mv);
     amo1_out_state = 0;
-    amo1_screen_processFault();
+    amo1_screen_on = 0;
+    amo1_screen_refresh();
     for(i=0;i<10;i++) _delay_ms(1000);
+  }
+  else if (amo1_fault==2) { //no diode fault
+    amo1_setOUTuA(0);
+    _delay_ms(100);
+    amo1_OUT(0);
+    amo1_setVDD1mV(amo1_vdd1_max_mv);
+    amo1_out_state = 0;
+    amo1_screen_on = 0;
+    amo1_screen_refresh();
+    for(i=0;i<5;i++) _delay_ms(1000);
   }
   amo1_fault = 0;
 }
@@ -500,7 +514,6 @@ uint32_t amo1_readIOUTmA()
   
   read_value = amo1_iout_cnts_to_mv*read_value;
   amo1_iout_ma = read_value;
-  if ((amo1_iout_ma*1000)>amo1_iout_max_ua) amo1_fault = 1;
   return read_value;
 }
 
@@ -539,18 +552,6 @@ void amo1_screen_debug()
   //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
 }
 
-void amo1_screen_processFault()
-{
-  if (amo1_fault==1) {
-    amo1_screen_on = 0;
-  }
-  CleO.Start();
-  CleO.RectangleJustification(MM);
-  CleO.LineColor(amo1_screen_line_color);
-  amo1_screen_draw();
-  CleO.Show();
-}
-
 void amo1_screen_refresh()
 {
     //------------------------------------------------------------------------------------------------------------------
@@ -568,9 +569,10 @@ void amo1_screen_refresh()
     //------------------------------------------------------------------------------------------------------------------
     // Collect Tags
     //------------------------------------------------------------------------------------------------------------------
-    amo1_screen_processButtons();
-    if (amo1_screen_short_press_detected) amo1_screen_processShortPress();
-
+    if (amo1_fault==0) {
+      amo1_screen_processButtons();
+      if (amo1_screen_short_press_detected) amo1_screen_processShortPress();
+    }
     //------------------------------------------------------------------------------------------------------------------
     // Update Screen
     //------------------------------------------------------------------------------------------------------------------
@@ -615,9 +617,8 @@ void amo1_screen_draw()
       //sprintf(buf_on_off, "%1lu.%02luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
       sprintf(buf_on_off, "%0.2fV, %lumA", amo1_vout_mv/1000.0, amo1_iout_ma);
     }
-    else if (amo1_fault == 1) {
-      sprintf(buf_on_off, "%s", "Current Fault !");
-    }
+    else if (amo1_fault == 1) sprintf(buf_on_off, "%s", "Max Current Fault");
+    else if (amo1_fault == 2) sprintf(buf_on_off, "%s", "Diode Not Connected");
     CleO.StringExt(FONT_SANS_4 , 60 + x_offset , 280 , amo1_screen_text_color , MM , 0 , 0, buf_on_off);
     //CleO.Tag(0);
 
@@ -766,8 +767,8 @@ void amo1_screen_increaseSetCurrent(int i)
       amo1_screen_current[1]=0;
       amo1_screen_current[2]=0;
       amo1_screen_current[3]=0;
-      amo1_screen_current[4]=8;
-      amo1_screen_current[5]=0;
+      amo1_screen_current[4]=0;
+      amo1_screen_current[5]=2;
       return;
     }
 }

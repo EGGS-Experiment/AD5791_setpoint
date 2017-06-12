@@ -97,6 +97,8 @@ int main(void) {
     */
     
     if (counter%100==0) {
+      //amo1_readIOUTmA();
+      //amo1_readVOUTmV();
       amo1_adjVDD1();
       amo1_processFault();
       no_op=0;
