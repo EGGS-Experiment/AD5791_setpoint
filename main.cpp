@@ -103,11 +103,11 @@ int main(void) {
       amo1_processFault();
       no_op=0;
     }
-    if (counter%50==0) {
+    if (counter%100==0) {
       amo1_setOUT();
       no_op=0;
     }
-    if (counter%20==0) {
+    if (counter%50==0) {
       amo1_screen_refresh();
       no_op=0;
     }

@@ -64,7 +64,7 @@ AD5541 amo1_out_dac(SPI_FLEX_AMO1_IOUT);
 uint8_t   amo1_fault = 0;
 
 const uint32_t  amo1_vdd1_max_mv = 11000;
-const uint32_t  amo1_vdd1_min_mv = 5000;
+const uint32_t  amo1_vdd1_min_mv = 6000;
 const float     amo1_vdd1_mv_to_cnts = 4.35;
 const uint32_t  amo1_vdd1_cnts = 65535;
 
@@ -179,6 +179,7 @@ uint32_t amo1_readVOUTmV();
 
 // Screen Functions
 void amo1_screen_debug();
+void amo1_screen_init();
 
 void amo1_screen_refresh();
 void amo1_screen_draw();
@@ -212,20 +213,13 @@ void amo1_init()
   amo1_initRead();
   
   // screen init
-  CleO.begin();
-  CleO.Display(100);
-  CleO.Start();
-  CleO.RectangleJustification(MM);
-  CleO.SetBackgroundcolor(0xe9d3ebUL);
-  CleO.Show();
-  CleO.DisplayRotate(2, 0);
-  CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
+  amo1_screen_init();
   
-  // AMO1 init setup
+  // AMO1 setup
   amo1_setVDD1mV(amo1_vdd1_min_mv);
   amo1_VDD1(1);
   amo1_setOUTuA(0);
-  _delay_ms(1000); //wait for iout to settle before ramping up VDD1
+  _delay_ms(5000); //wait for iout to settle before ramping up VDD1
   amo1_setVDD1mV(amo1_vdd1_max_mv);
   amo1_setOUTuA(0); //program one more time to be safe
   
@@ -550,6 +544,29 @@ void amo1_screen_debug()
   printf("CleO Noop() Echo = %d\n", CleO.Echo());
   //printf("spi_flex_read_byte = 0x%x\n", spi_flex_read_byte(0));
   //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
+}
+
+void amo1_screen_init()
+{
+  char buf_text[20];
+  CleO.begin();
+  CleO.Display(100);
+  CleO.Start();
+  CleO.RectangleJustification(MM);
+  CleO.SetBackgroundcolor(0xe9d3ebUL);
+  sprintf(buf_text,"Diode Laser Current Controller");
+  CleO.StringExt(FONT_SANS_4, AMO1_SCREEN_WIDTH/2, 30, amo1_screen_text_color, MM, 0, 0, buf_text);
+  sprintf(buf_text,"Device ID : AMO1");
+  CleO.StringExt(FONT_BIT_3, 10, 100, amo1_screen_text_color, ML, 0, 0, buf_text);
+  sprintf(buf_text,"Hardware ID : 0.0.0");
+  CleO.StringExt(FONT_BIT_3 , 10 , 130 , amo1_screen_text_color , ML , 0 , 0, buf_text);
+  sprintf(buf_text,"Firmware ID : 0.0.0");
+  CleO.StringExt(FONT_BIT_3, 10, 160, amo1_screen_text_color, ML, 0, 0, buf_text);
+  sprintf(buf_text,"Starting Up ... ");
+  CleO.StringExt(FONT_BIT_4 , 10 , 200 , amo1_screen_text_color , ML , 0 , 0, buf_text);
+  CleO.Show();
+  CleO.DisplayRotate(2, 0);
+  CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
 }
 
 void amo1_screen_refresh()
