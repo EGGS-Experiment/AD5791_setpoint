@@ -14,6 +14,10 @@
 #define AMO6_EXT1_EN_DDR   	DDRG
 #define AMO6_EXT1_EN_PORT  	PORTG
 
+#define AMO6_BUZZER_EN		PD7
+#define AMO6_BUZZER_EN_DDR   	DDRD
+#define AMO6_BUZZER_EN_PORT  	PORTD
+
 #define AMO1_VDD1_EN		PK3   //17>K3
 #define AMO1_VDD1_EN_DDR   	DDRK
 #define AMO1_VDD1_EN_PORT  	PORTK
@@ -206,6 +210,9 @@ void amo1_init()
   AMO6_CLEO_PWR_PORT |=  _BV(AMO6_CLEO_PWR); //1
   AMO6_EXT1_EN_DDR  |=  _BV(AMO6_EXT1_EN); //output
   AMO6_EXT1_EN_PORT &= ~_BV(AMO6_EXT1_EN); //0
+  AMO6_BUZZER_EN_DDR  |=  _BV(AMO6_BUZZER_EN); //output
+  AMO6_BUZZER_EN_PORT |=  _BV(AMO6_BUZZER_EN); //1
+  //AMO6_BUZZER_EN_PORT &= ~_BV(AMO6_BUZZER_EN); //0
   
   // AMO1 init
   amo1_initOUT();
@@ -240,6 +247,7 @@ void amo1_processFault()
   
   uint16_t i;
   if (amo1_fault==1) { //max current fault
+    
     amo1_setOUTuA(0);
     _delay_ms(100);
     amo1_OUT(0);
@@ -247,7 +255,11 @@ void amo1_processFault()
     amo1_out_state = 0;
     amo1_screen_on = 0;
     amo1_screen_refresh();
-    for(i=0;i<10;i++) _delay_ms(1000);
+    for(i=0;i<20;i++) {
+      AMO6_BUZZER_EN_PORT ^=  _BV(AMO6_BUZZER_EN); //toggle
+      _delay_ms(500);
+    }
+    AMO6_BUZZER_EN_PORT |=  _BV(AMO6_BUZZER_EN); //1
   }
   else if (amo1_fault==2) { //no diode fault
     amo1_setOUTuA(0);
@@ -257,7 +269,11 @@ void amo1_processFault()
     amo1_out_state = 0;
     amo1_screen_on = 0;
     amo1_screen_refresh();
-    for(i=0;i<5;i++) _delay_ms(1000);
+    for(i=0;i<10;i++) {
+      AMO6_BUZZER_EN_PORT ^=  _BV(AMO6_BUZZER_EN); //toggle
+      _delay_ms(500);
+    }
+    AMO6_BUZZER_EN_PORT |=  _BV(AMO6_BUZZER_EN); //1
   }
   amo1_fault = 0;
 }
@@ -378,25 +394,29 @@ void amo1_setOUT()
 {
   uint32_t microamps = amo1_screen_getCurrent();
   if (amo1_out_state==0 && amo1_screen_on==1) { //off -> on
+    AMO6_BUZZER_EN_PORT &= ~_BV(AMO6_BUZZER_EN); //0
     amo1_OUT(1);
     amo1_setOUTuA(microamps);
     amo1_prev_iout_ua = microamps;
     amo1_out_state = 1;
     _delay_ms(100);
-//    delay(100);
+    AMO6_BUZZER_EN_PORT |=  _BV(AMO6_BUZZER_EN); //1
   }
   else if (amo1_out_state==1 && amo1_screen_on==0) { //on -> off
+    AMO6_BUZZER_EN_PORT &= ~_BV(AMO6_BUZZER_EN); //0
     amo1_setOUTuA(0);
     _delay_ms(100);
-//    delay(100);
     amo1_OUT(0);
     amo1_setVDD1mV(amo1_vdd1_max_mv);
     amo1_out_state = 0;
+    AMO6_BUZZER_EN_PORT |=  _BV(AMO6_BUZZER_EN); //1
   }
   else if (amo1_out_state==1 && amo1_screen_on==1) { //on -> on
     if (microamps!=amo1_prev_iout_ua) {
+      AMO6_BUZZER_EN_PORT &= ~_BV(AMO6_BUZZER_EN); //0
       amo1_setOUTuA(microamps);
       amo1_prev_iout_ua=microamps;
+      AMO6_BUZZER_EN_PORT |=  _BV(AMO6_BUZZER_EN); //1
     }
   }
 }
@@ -560,7 +580,7 @@ void amo1_screen_init()
   CleO.StringExt(FONT_BIT_3, 10, 100, amo1_screen_text_color, ML, 0, 0, buf_text);
   sprintf(buf_text,"Hardware ID : 0.0.0");
   CleO.StringExt(FONT_BIT_3 , 10 , 130 , amo1_screen_text_color , ML , 0 , 0, buf_text);
-  sprintf(buf_text,"Firmware ID : 0.0.0");
+  sprintf(buf_text,"Firmware ID : 0.0.1");
   CleO.StringExt(FONT_BIT_3, 10, 160, amo1_screen_text_color, ML, 0, 0, buf_text);
   sprintf(buf_text,"Starting Up ... ");
   CleO.StringExt(FONT_BIT_4 , 10 , 200 , amo1_screen_text_color , ML , 0 , 0, buf_text);
