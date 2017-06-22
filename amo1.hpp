@@ -69,19 +69,20 @@ uint8_t   amo1_fault = 0;
 
 const uint32_t  amo1_vdd1_max_mv = 11000;
 const uint32_t  amo1_vdd1_min_mv = 6000;
+const uint32_t  amo1_vdd1_startup_mv = 5000;
 const float     amo1_vdd1_mv_to_cnts = 4.35;
 const uint32_t  amo1_vdd1_cnts = 65535;
 
-const uint32_t  amo1_iout_max_ua = 250000;
-const uint32_t  amo1_iout_max_set_ua = 200000;
-const float     amo1_iout_ua_to_cnts = 0.32071;
-const uint32_t  amo1_iout_res = 20;
+const uint32_t  amo1_iout_max_set_ua = 200000;                    //change screen limit as well
+const uint32_t  amo1_iout_max_ua = amo1_iout_max_set_ua + 20000;  //high current fault detection
+const float     amo1_iout_res = 20;
+const float     amo1_iout_ua_to_cnts = 0.31354;
 const uint32_t  amo1_iout_cnts = 65535;
 
-const uint32_t  amo1_pfet_iout_trig_ma = 20;  //prevent pfet correction when output is off
+const uint32_t  amo1_pfet_iout_trig_ma = 20;  //prevent pfet correction when output is low current
 
-const uint32_t  amo1_pfet_max_mw = 200;       //target pfet power when max_trig is trigged
-const uint32_t  amo1_pfet_max_trig_mw = 260;  //pfet power trigger, hysteresis = (amo1_pfet_max_trig_mw-amo1_pfet_max_mw) should be above the noise of system
+const uint32_t  amo1_pfet_max_mw = 200;                         //max pfet power target
+const uint32_t  amo1_pfet_max_trig_mw = amo1_pfet_max_mw + 60;  //pfet max power trigger with 60mw hysteresis for noise
 const uint8_t   amo1_pfet_pmax_trig_cnt_max = 2;
 uint8_t         amo1_pfet_pmax_trig_cnt = 0;
 
@@ -223,7 +224,7 @@ void amo1_init()
   amo1_screen_init();
   
   // AMO1 setup
-  amo1_setVDD1mV(amo1_vdd1_min_mv);
+  amo1_setVDD1mV(amo1_vdd1_startup_mv);
   amo1_VDD1(1);
   amo1_setOUTuA(0);
   _delay_ms(5000); //wait for iout to settle before ramping up VDD1
@@ -307,13 +308,13 @@ void amo1_adjVDD1()
         vdd1_mv = amo1_prev_vdd1_mv-pfet_dv_mv;
         if (vdd1_mv>0) {
           amo1_setVDD1mV(vdd1_mv);
-          //SerialUSB.println("-- adjVDD1 > amo1_pfet_max_trig_mw > new vdd1 --");
-          //SerialUSB.println(amo1_iout_ma);
-          //SerialUSB.println(amo1_vout_mv);
-          //SerialUSB.println(pfet_mv);
-          //SerialUSB.println(pfet_mw);
-          //SerialUSB.println(pfet_dv_mv);
-          //SerialUSB.println(vdd1_mv);
+          /*printf("adjVDD1 > amo1_pfet_max_trig_mw > new vdd1\n");
+          printf("amo1_iout_ma = %lu\n", amo1_iout_ma);
+          printf("amo1_vout_mv = %lu\n", amo1_vout_mv);
+          printf("pfet_mv = %lu\n", pfet_mv);
+          printf("pfet_mw = %lu\n", pfet_mw);
+          printf("pfet_dv_mv = %lu\n", pfet_dv_mv);
+          printf("vdd1_mv = %lu\n", vdd1_mv);*/
         }
         amo1_pfet_pmax_trig_cnt=0;
       }
@@ -350,7 +351,6 @@ void amo1_VDD1(bool state)
 {
   if (state) AMO1_VDD1_EN_PORT |=  _BV(AMO1_VDD1_EN); //1
   else       AMO1_VDD1_EN_PORT &= ~_BV(AMO1_VDD1_EN); //0
-//  controller.setDO(1, state);
 }
 
 void amo1_setVDD1mV(uint32_t millivolts)
@@ -377,7 +377,6 @@ void amo1_setVDD1cnts(uint16_t counts)
 {
   amo1_vdd1_dac.setCounts(counts);
   //SerialUSB.println(counts);
-//  controller.writeDac2(counts);
 }
 
 // OUT Write Functions
@@ -427,7 +426,6 @@ void amo1_OUT(bool state)
     AMO1_OUT_EN_PORT |=  _BV(AMO1_OUT_EN); //1
   else
     AMO1_OUT_EN_PORT &= ~_BV(AMO1_OUT_EN); //0
-//  controller.setDO(0, state);
 }
 
 void amo1_setOUTuA(uint32_t microamps)
@@ -453,7 +451,6 @@ void amo1_setOUTcnts(uint16_t counts)
 {
   amo1_out_dac.setCounts(counts);
   //SerialUSB.println(counts);
-//  controller.writeDac1(counts);
 }
 
 // Read Functions
@@ -575,15 +572,20 @@ void amo1_screen_init()
   CleO.RectangleJustification(MM);
   CleO.SetBackgroundcolor(0xe9d3ebUL);
   sprintf(buf_text,"Diode Laser Current Controller");
+  
   CleO.StringExt(FONT_SANS_4, AMO1_SCREEN_WIDTH/2, 30, amo1_screen_text_color, MM, 0, 0, buf_text);
   sprintf(buf_text,"Device ID : AMO1");
   CleO.StringExt(FONT_BIT_3, 10, 100, amo1_screen_text_color, ML, 0, 0, buf_text);
-  sprintf(buf_text,"Hardware ID : 0.0.0");
-  CleO.StringExt(FONT_BIT_3 , 10 , 130 , amo1_screen_text_color , ML , 0 , 0, buf_text);
-  sprintf(buf_text,"Firmware ID : 0.0.1");
-  CleO.StringExt(FONT_BIT_3, 10, 160, amo1_screen_text_color, ML, 0, 0, buf_text);
+  sprintf(buf_text,"Hardware ID : 0.1.2");
+  CleO.StringExt(FONT_BIT_3 , 10 , 120 , amo1_screen_text_color , ML , 0 , 0, buf_text);
+  sprintf(buf_text,"Firmware ID : 0.0.2");
+  CleO.StringExt(FONT_BIT_3, 10, 140, amo1_screen_text_color, ML, 0, 0, buf_text);
+  
+  sprintf(buf_text,"%lu,%2.2f,%0.5f,%lu", amo1_iout_max_set_ua/1000, amo1_iout_res, amo1_iout_ua_to_cnts, amo1_pfet_max_mw);
+  CleO.StringExt(FONT_BIT_3, 10, 180, amo1_screen_text_color, ML, 0, 0, buf_text);
+  
   sprintf(buf_text,"Starting Up ... ");
-  CleO.StringExt(FONT_BIT_4 , 10 , 200 , amo1_screen_text_color , ML , 0 , 0, buf_text);
+  CleO.StringExt(FONT_BIT_4 , 10 , 220 , amo1_screen_text_color , ML , 0 , 0, buf_text);
   CleO.Show();
   CleO.DisplayRotate(2, 0);
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
