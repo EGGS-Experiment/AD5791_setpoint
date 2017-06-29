@@ -33,9 +33,8 @@
 #include "CleO.hpp"
 #include "ad5541.hpp"
 #include "ad5621.hpp"
-#include "ad5209.hpp"
+#include "ad5290.hpp"
 #include "max11100.hpp"
-//#include "amo1.hpp"
 #include "amo2.hpp"
 
 int main(void) {

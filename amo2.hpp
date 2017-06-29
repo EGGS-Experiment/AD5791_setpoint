@@ -62,7 +62,7 @@
 uint8_t   amo2_fault = 0;
 AD5541 amo2_VT_dac(SPI_FLEX_AMO2_VT);
 AD5621 amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
-AD5209 amo2_PID_rpot(SPI_FLEX_AMO2_PID);
+AD5290 amo2_PID_rpot(SPI_FLEX_AMO2_PID);
 MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
 
 void amo2_init();
@@ -146,7 +146,7 @@ uint32_t amo2_screen_getCurrent();
 // AMO2
 void amo2_init()
 {
-  // Hardware PINs init
+  // hardware i/o config
   AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR);//output
   AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
   AMO2_PWR_nOK_DDR  &= ~_BV(AMO2_PWR_nOK); //input
@@ -180,21 +180,23 @@ void amo2_init()
   AMO6_BUZZER_nEN_DDR  |=  _BV(AMO6_BUZZER_nEN); //output
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
   
-  // Hardware init
+  // hardware init
   amo2_VT_init();
   amo2_VILM_init();
   amo2_PID_init();
   amo2_VPP_init();
   amo2_screen_init();
-  _delay_ms(5000);
+//  _delay_ms(5000);
 }
 
 void amo2_VT_init()
 {
+//  amo2_VT_dac.setCounts(32768);
 }
 
 void amo2_VILM_init()
 {
+//  amo2_VILM_dac.setCounts(2048);
 }
 
 void amo2_PID_init()
