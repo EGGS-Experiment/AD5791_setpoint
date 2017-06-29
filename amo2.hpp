@@ -2,14 +2,10 @@
 #define AMO2_H 1
 
 //////////////////////////////////////////////////////////////////////////////////////
-// Variables & Constants
+// Declaration
 //////////////////////////////////////////////////////////////////////////////////////
 
-// Core Variables & Constants
-#define AMO6_CLEO_nPWR		PG0
-#define AMO6_CLEO_nPWR_DDR	DDRG
-#define AMO6_CLEO_nPWR_PORT	PORTG
-
+// AMO2
 #define AMO6_EXT1_nEN		PG1
 #define AMO6_EXT1_nEN_DDR   	DDRG
 #define AMO6_EXT1_nEN_PORT  	PORTG
@@ -22,9 +18,64 @@
 #define AMO6_BUZZER_nEN_DDR   	DDRD
 #define AMO6_BUZZER_nEN_PORT  	PORTD
 
-uint8_t   amo2_fault = 0;
+#define AMO2_PWR_nOK		PK0
+#define AMO2_PWR_nOK_PIN   	PINK
+#define AMO2_PWR_nOK_DDR   	DDRK
+#define AMO2_PWR_nOK_PORT  	PORTK
 
-// Screen Variables & Constants
+#define AMO2_SW1		PK2
+#define AMO2_SW1_DDR   		DDRK
+#define AMO2_SW1_PORT  		PORTK
+
+#define AMO2_SW2		PK4
+#define AMO2_SW2_DDR   		DDRK
+#define AMO2_SW2_PORT  		PORTK
+
+#define AMO2_SW3		PA6
+#define AMO2_SW3_DDR   		DDRA
+#define AMO2_SW3_PORT  		PORTA
+
+#define AMO2_SW4		PA4
+#define AMO2_SW4_DDR   		DDRA
+#define AMO2_SW4_PORT  		PORTA
+
+#define AMO2_SW5		PA2
+#define AMO2_SW5_DDR   		DDRA
+#define AMO2_SW5_PORT  		PORTA
+
+#define AMO2_SW6		PJ5
+#define AMO2_SW6_DDR   		DDRJ
+#define AMO2_SW6_PORT  		PORTJ
+
+#define AMO2_SW7		PJ7
+#define AMO2_SW7_DDR   		DDRJ
+#define AMO2_SW7_PORT  		PORTJ
+
+#define AMO2_SW8		PK6
+#define AMO2_SW8_DDR   		DDRK
+#define AMO2_SW8_PORT  		PORTK
+
+#define AMO2_SW9		PA0
+#define AMO2_SW9_DDR   		DDRA
+#define AMO2_SW9_PORT  		PORTA
+
+uint8_t   amo2_fault = 0;
+AD5541 amo2_VT_dac(SPI_FLEX_AMO2_VT);
+AD5621 amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
+AD5209 amo2_PID_rpot(SPI_FLEX_AMO2_PID);
+MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
+
+void amo2_init();
+void amo2_VT_init();
+void amo2_VILM_init();
+void amo2_PID_init();
+void amo2_VPP_init();
+
+// Screen
+#define AMO6_CLEO_nPWR		PG0
+#define AMO6_CLEO_nPWR_DDR	DDRG
+#define AMO6_CLEO_nPWR_PORT	PORTG
+
 #define MY_ORANGE   0xfa7626UL
 #define MY_MAGENTA  0xff0086UL
 #define MY_RED      0xff6666UL
@@ -76,11 +127,6 @@ bool amo1_screen_pressed[AMO1_SCREEN_NUM_OF_DIGITS * 2] = {0};
 bool amo1_screen_on = false;
 bool amo1_screen_toggle_on = true;
 
-//////////////////////////////////////////////////////////////////////////////////////
-// Member Functions Declaration
-//////////////////////////////////////////////////////////////////////////////////////
-void amo2_init();
-
 void amo2_screen_debug();
 void amo2_screen_init();
 void amo2_screen_refresh();
@@ -94,48 +140,72 @@ bool amo2_screen_isOn();
 uint32_t amo2_screen_getCurrent();
 
 //////////////////////////////////////////////////////////////////////////////////////
-// Member Functions Implementation
+// Implementation
 //////////////////////////////////////////////////////////////////////////////////////
 
-// AMO2 Functions
+// AMO2
 void amo2_init()
 {
-  // AMO6 init
+  // Hardware PINs init
   AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR);//output
   AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
+  AMO2_PWR_nOK_DDR  &= ~_BV(AMO2_PWR_nOK); //input
+  AMO2_PWR_nOK_PORT &= ~_BV(AMO2_PWR_nOK); //disable pullup
+  amo2_VT_dac.init();
+  amo2_VILM_dac.init();
+  amo2_PID_rpot.init();
+  amo2_VPP_adc.init();
+  AMO2_SW1_DDR  |=  _BV(AMO2_SW1); //output
+  AMO2_SW1_PORT &= ~_BV(AMO2_SW1); //0
+  AMO2_SW2_DDR  |=  _BV(AMO2_SW2); //output
+  AMO2_SW2_PORT &= ~_BV(AMO2_SW2); //0
+  AMO2_SW3_DDR  |=  _BV(AMO2_SW3); //output
+  AMO2_SW3_PORT &= ~_BV(AMO2_SW3); //0
+  AMO2_SW4_DDR  |=  _BV(AMO2_SW4); //output
+  AMO2_SW4_PORT &= ~_BV(AMO2_SW4); //0
+  AMO2_SW5_DDR  |=  _BV(AMO2_SW5); //output
+  AMO2_SW5_PORT &= ~_BV(AMO2_SW5); //0
+  AMO2_SW6_DDR  |=  _BV(AMO2_SW6); //output
+  AMO2_SW6_PORT &= ~_BV(AMO2_SW6); //0
+  AMO2_SW7_DDR  |=  _BV(AMO2_SW7); //output
+  AMO2_SW7_PORT &= ~_BV(AMO2_SW7); //0
+  AMO2_SW8_DDR  |=  _BV(AMO2_SW8); //output
+  AMO2_SW8_PORT &= ~_BV(AMO2_SW8); //0
+  AMO2_SW9_DDR  |=  _BV(AMO2_SW9); //output
+  AMO2_SW9_PORT &= ~_BV(AMO2_SW9); //0
   AMO6_EXT1_nEN_DDR  |=  _BV(AMO6_EXT1_nEN); //output
   AMO6_EXT1_nEN_PORT &= ~_BV(AMO6_EXT1_nEN); //0
   AMO6_EXT2_nEN_DDR  |=  _BV(AMO6_EXT2_nEN); //output
-  AMO6_EXT2_nEN_PORT &= ~_BV(AMO6_EXT2_nEN); //0
+  AMO6_EXT2_nEN_PORT |=  _BV(AMO6_EXT2_nEN); //1
   AMO6_BUZZER_nEN_DDR  |=  _BV(AMO6_BUZZER_nEN); //output
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
   
-  // AMO2 init
-//  amo1_initOUT();
-//  amo1_initVDD1();
-//  amo1_initRead();
-  
-  // screen init
+  // Hardware init
+  amo2_VT_init();
+  amo2_VILM_init();
+  amo2_PID_init();
+  amo2_VPP_init();
   amo2_screen_init();
-  
-  // AMO1 setup
-//  amo1_setVDD1mV(amo1_vdd1_startup_mv);
-//  amo1_VDD1(1);
-//  amo1_setOUTuA(0);
-  _delay_ms(5000); //wait for iout to settle before ramping up VDD1
-//  amo1_setVDD1mV(amo1_vdd1_max_mv);
-//  amo1_setOUTuA(0); //program one more time to be safe
-  
-  // AMO1 unused pins
-//  AMO1_OUT_FET_DDR  |=  _BV(AMO1_OUT_FET); //output
-//  AMO1_OUT_FET_PORT &= ~_BV(AMO1_OUT_FET); //0
-//  AMO1_D1_4_DDR  |=  _BV(AMO1_D1_4); //output
-//  AMO1_D1_4_PORT |=  _BV(AMO1_D1_4); //1
-//  AMO1_D2_4_DDR  |=  _BV(AMO1_D2_4); //output
-//  AMO1_D2_4_PORT |=  _BV(AMO1_D2_4); //1
+  _delay_ms(5000);
 }
 
-// Screen Functions
+void amo2_VT_init()
+{
+}
+
+void amo2_VILM_init()
+{
+}
+
+void amo2_PID_init()
+{
+}
+
+void amo2_VPP_init()
+{
+}
+
+// Screen
 void amo2_screen_debug()
 {
   printf("CleO Version = %d\n", CleO.Version());
@@ -149,6 +219,11 @@ void amo2_screen_debug()
 void amo2_screen_init()
 {
   char buf_text[20];
+  AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR); //output
+  AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
+  _delay_ms(1000);
+  AMO6_CLEO_nPWR_PORT &= ~_BV(AMO6_CLEO_nPWR); //0
+  _delay_ms(1000);
   CleO.begin();
   CleO.Display(100);
   CleO.Start();

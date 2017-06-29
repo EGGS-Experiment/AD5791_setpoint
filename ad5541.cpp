@@ -6,7 +6,7 @@ AD5541::AD5541(const unsigned char spi)
   spi_n = spi;
 }
 
-void AD5541::setCounts (uint16_t counts)
+void AD5541::setCounts(uint16_t counts)
 {
   spi_flex_sel(spi_n);
   spi_flex_write_byte(spi_n, (counts >>  8) & 0xFF);

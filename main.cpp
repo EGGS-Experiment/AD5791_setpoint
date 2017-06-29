@@ -26,13 +26,15 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
-#include "serial_console.h"
+//#include "serial_console.h"
 #include "led.h"
 #include "spi_flex.h"
 
 #include "CleO.hpp"
 #include "ad5541.hpp"
 #include "ad5621.hpp"
+#include "ad5209.hpp"
+#include "max11100.hpp"
 //#include "amo1.hpp"
 #include "amo2.hpp"
 
@@ -61,7 +63,7 @@ int main(void) {
   // finally: turn on interrupts
   // ////////////////////////////////////////////////////////////////////////
 
-  sei();
+//  sei();
 
   // ////////////////////////////////////////////////////////////////////////
   // main program loop

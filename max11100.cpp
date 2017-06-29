@@ -1,12 +1,12 @@
 #include <assert.h>
-#include "ad5621.hpp"
+#include "max11100.hpp"
 
-AD5621::AD5621(const unsigned char spi)
+MAX11100::MAX11100(const unsigned char spi)
 {
   spi_n = spi;
 }
 
-void AD5621::setCounts(uint16_t counts)
+void MAX11100::setCounts(uint16_t counts)
 {
 /*spi_flex_sel(spi_n);
   spi_flex_write_byte(spi_n, (counts >>  8) & 0xFF);
@@ -14,7 +14,7 @@ void AD5621::setCounts(uint16_t counts)
   spi_flex_usel(spi_n);*/
 }
 
-void AD5621::init()
+void MAX11100::init()
 {
   spi_flex_init(spi_n);
 }
