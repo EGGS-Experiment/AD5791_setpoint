@@ -6,12 +6,16 @@ MAX11100::MAX11100(const unsigned char spi)
   spi_n = spi;
 }
 
-void MAX11100::setCounts(uint16_t counts)
+uint16_t MAX11100::readCounts()
 {
-/*spi_flex_sel(spi_n);
-  spi_flex_write_byte(spi_n, (counts >>  8) & 0xFF);
-  spi_flex_write_byte(spi_n, (counts >>  0) & 0xFF);
-  spi_flex_usel(spi_n);*/
+  spi_flex_sel(spi_n);
+  spi_flex_read_byte(spi_n);
+  uint8_t b1 = spi_flex_read_byte(spi_n);
+  uint8_t b2 = spi_flex_read_byte(spi_n);
+  spi_flex_usel(spi_n);
+  
+  uint16_t counts = ((b1<<8) | (b2<<0));
+  return counts;
 }
 
 void MAX11100::init()

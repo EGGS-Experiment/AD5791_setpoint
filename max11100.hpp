@@ -10,7 +10,7 @@ public:
   MAX11100(const unsigned char spi);
 
   void init();
-  void setCounts(uint16_t counts);
+  uint16_t readCounts();
 
 private:
   unsigned char spi_n;

@@ -10,7 +10,7 @@ public:
   AD5290(const unsigned char spi);
 
   void init();
-  void setCounts(uint16_t counts);
+  void setCounts(uint32_t counts);
 
 private:
   unsigned char spi_n;

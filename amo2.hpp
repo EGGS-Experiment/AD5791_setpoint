@@ -59,11 +59,11 @@
 #define AMO2_SW9_DDR   		DDRA
 #define AMO2_SW9_PORT  		PORTA
 
-uint8_t   amo2_fault = 0;
 AD5541 amo2_VT_dac(SPI_FLEX_AMO2_VT);
 AD5621 amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
 AD5290 amo2_PID_rpot(SPI_FLEX_AMO2_PID);
 MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
+uint8_t   amo2_fault = 0;
 
 void amo2_init();
 void amo2_VT_init();
@@ -158,7 +158,8 @@ void amo2_init()
   AMO2_SW1_DDR  |=  _BV(AMO2_SW1); //output
   AMO2_SW1_PORT &= ~_BV(AMO2_SW1); //0
   AMO2_SW2_DDR  |=  _BV(AMO2_SW2); //output
-  AMO2_SW2_PORT &= ~_BV(AMO2_SW2); //0
+  //AMO2_SW2_PORT &= ~_BV(AMO2_SW2); //0
+  AMO2_SW2_PORT |=  _BV(AMO2_SW2); //1
   AMO2_SW3_DDR  |=  _BV(AMO2_SW3); //output
   AMO2_SW3_PORT &= ~_BV(AMO2_SW3); //0
   AMO2_SW4_DDR  |=  _BV(AMO2_SW4); //output
@@ -191,16 +192,20 @@ void amo2_init()
 
 void amo2_VT_init()
 {
-//  amo2_VT_dac.setCounts(32768);
+  amo2_VT_dac.setCounts(32768); //mid
 }
 
 void amo2_VILM_init()
 {
-//  amo2_VILM_dac.setCounts(2048);
+//  amo2_VILM_dac.setCounts(2048); //mid
 }
 
 void amo2_PID_init()
 {
+//  amo2_PID_rpot.setCounts(0x000000); //low
+//  amo2_PID_rpot.setCounts(0x808080); //mid
+//  amo2_PID_rpot.setCounts(0xFFFFFF); //high
+//  amo2_PID_rpot.setCounts(0xFF8000);
 }
 
 void amo2_VPP_init()
@@ -315,6 +320,7 @@ void amo2_screen_draw()
     if (amo1_screen_on) {
       //sprintf(buf_on_off, "%1lu.%02luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
 //      sprintf(buf_on_off, "%0.2fV, %lumA", amo1_vout_mv/1000.0, amo1_iout_ma);
+      sprintf(buf_on_off, "%u", amo2_VPP_adc.readCounts());
     }
     else if (amo2_fault == 1) sprintf(buf_on_off, "%s", "Max Current Fault");
     else if (amo2_fault == 2) sprintf(buf_on_off, "%s", "Diode Not Connected");
