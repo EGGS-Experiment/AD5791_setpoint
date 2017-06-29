@@ -57,7 +57,7 @@ void spi_flex_init(const unsigned char spi_n) {
     SPI_FLEX_01_IRQ_DDR  &= ~_BV(SPI_FLEX_01_IRQ); //input
     SPI_FLEX_01_IRQ_PORT &= ~_BV(SPI_FLEX_01_IRQ); //disable pullup
   }
-  else if (spi_n == SPI_FLEX_AMO1_VDD1) { //0x02, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VT) { //0x02, SPI_MODE0
     SPI_FLEX_02_DIS_DDR  |=  _BV(SPI_FLEX_02_DIS); //output
     //SPI_FLEX_02_DIS_PORT |=  _BV(SPI_FLEX_02_DIS); //1
     SPI_FLEX_02_DIS_PORT &= ~_BV(SPI_FLEX_02_DIS); //0
@@ -75,7 +75,7 @@ void spi_flex_init(const unsigned char spi_n) {
     SPI_FLEX_02_SDO_PORT |=  _BV(SPI_FLEX_02_SDO); //1
     //SPI_FLEX_02_SDO_PORT &= ~_BV(SPI_FLEX_02_SDO); //0
   }
-  else if (spi_n == SPI_FLEX_AMO1_IOUT) { //0x03, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VILM) { //0x03, SPI_MODE0
     SPI_FLEX_03_DIS_DDR  |=  _BV(SPI_FLEX_03_DIS); //output
     //SPI_FLEX_03_DIS_PORT |=  _BV(SPI_FLEX_03_DIS); //1
     SPI_FLEX_03_DIS_PORT &= ~_BV(SPI_FLEX_03_DIS); //0
@@ -110,13 +110,13 @@ void spi_flex_sel(const unsigned char spi_n) {
     SPI_FLEX_01_CLK_PORT &= ~_BV(SPI_FLEX_01_CLK); //0
     SPI_FLEX_01_nCS_PORT &= ~_BV(SPI_FLEX_01_nCS); //0
   }
-  else if (spi_n == SPI_FLEX_AMO1_VDD1) { //0x02, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VT) { //0x02, SPI_MODE0
     //SPI_FLEX_02_DIS_PORT &= ~_BV(SPI_FLEX_02_DIS); //0
     //_delay_loop_1(1);
     SPI_FLEX_02_CLK_PORT &= ~_BV(SPI_FLEX_02_CLK); //0
     SPI_FLEX_02_nCS_PORT &= ~_BV(SPI_FLEX_02_nCS); //0
   }
-  else if (spi_n == SPI_FLEX_AMO1_IOUT) { //0x03, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VILM) { //0x03, SPI_MODE0
     //SPI_FLEX_03_DIS_PORT &= ~_BV(SPI_FLEX_03_DIS); //0
     //_delay_loop_1(1);
     SPI_FLEX_03_CLK_PORT &= ~_BV(SPI_FLEX_03_CLK); //0
@@ -130,14 +130,14 @@ void spi_flex_usel(const unsigned char spi_n) {
     SPI_FLEX_01_CLK_PORT |=  _BV(SPI_FLEX_01_CLK); //1
     SPI_FLEX_01_SDO_PORT |=  _BV(SPI_FLEX_01_SDO); //1
   }
-  else if (spi_n == SPI_FLEX_AMO1_VDD1) { //0x02, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VT) { //0x02, SPI_MODE0
     SPI_FLEX_02_nCS_PORT |=  _BV(SPI_FLEX_02_nCS); //1
     SPI_FLEX_02_CLK_PORT |=  _BV(SPI_FLEX_02_CLK); //1
     SPI_FLEX_02_SDO_PORT |=  _BV(SPI_FLEX_02_SDO); //1
     //_delay_loop_1(1);
     //SPI_FLEX_02_DIS_PORT |=  _BV(SPI_FLEX_02_DIS); //1
   }
-  else if (spi_n == SPI_FLEX_AMO1_IOUT) { //0x03, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VILM) { //0x03, SPI_MODE0
     SPI_FLEX_03_nCS_PORT |=  _BV(SPI_FLEX_03_nCS); //1
     SPI_FLEX_03_CLK_PORT |=  _BV(SPI_FLEX_03_CLK); //1
     SPI_FLEX_03_SDO_PORT |=  _BV(SPI_FLEX_03_SDO); //1
@@ -158,7 +158,7 @@ static inline void __spi_flex_write_bit(const unsigned char spi_n,
     _delay_loop_1(1);
     SPI_FLEX_01_CLK_PORT &= ~_BV(SPI_FLEX_01_CLK); //0
   }
-  else if (spi_n == SPI_FLEX_AMO1_VDD1) { //0x02, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VT) { //0x02, SPI_MODE0
     if (bit)
       SPI_FLEX_02_SDO_PORT |=  _BV(SPI_FLEX_02_SDO); //1
     else
@@ -168,7 +168,7 @@ static inline void __spi_flex_write_bit(const unsigned char spi_n,
     _delay_loop_1(1);
     SPI_FLEX_02_CLK_PORT &= ~_BV(SPI_FLEX_02_CLK); //0
   }
-  else if (spi_n == SPI_FLEX_AMO1_IOUT) { //0x03, SPI_MODE0
+  else if (spi_n == SPI_FLEX_AMO2_VILM) { //0x03, SPI_MODE0
     if (bit)
       SPI_FLEX_03_SDO_PORT |=  _BV(SPI_FLEX_03_SDO); //1
     else

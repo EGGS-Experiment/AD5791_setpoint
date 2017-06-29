@@ -32,7 +32,9 @@
 
 #include "CleO.hpp"
 #include "ad5541.hpp"
-#include "amo1.hpp"
+#include "ad5621.hpp"
+//#include "amo1.hpp"
+#include "amo2.hpp"
 
 int main(void) {
   // ////////////////////////////////////////////////////////////////////////
@@ -45,8 +47,8 @@ int main(void) {
   // initialize serial console and redirect printf(), getchar() etc. to it
   serial_console_init();  // enables interrupt!
   
-  // AMO1
-  amo1_init();
+  // AMO2
+  amo2_init();
 
   // ////////////////////////////////////////////////////////////////////////
   // boot indicator
@@ -99,16 +101,16 @@ int main(void) {
     if (counter%100==0) {
       //amo1_readIOUTmA();
       //amo1_readVOUTmV();
-      amo1_adjVDD1();
-      amo1_processFault();
+//      amo1_adjVDD1();
+//      amo1_processFault();
       no_op=0;
     }
     if (counter%100==0) {
-      amo1_setOUT();
+//      amo1_setOUT();
       no_op=0;
     }
     if (counter%50==0) {
-      amo1_screen_refresh();
+      amo2_screen_refresh();
       no_op=0;
     }
     

@@ -30,7 +30,7 @@
 extern "C" {
 #endif
   
-// SPI_FLEX_01 = CLEO
+// SPI_FLEX_01
 #define SPI_FLEX_CLEO		0x01
 
 #define SPI_FLEX_01_CLK		PF3
@@ -69,51 +69,102 @@ extern "C" {
 #define SPI_FLEX_01_PWR_PORT  	PORTG
 
 // SPI_FLEX_02
-#define SPI_FLEX_AMO1_VDD1      0x02
+#define SPI_FLEX_AMO2_VT      0x02
 
-#define SPI_FLEX_02_CLK		PK2
+#define SPI_FLEX_02_CLK		PK1
 #define SPI_FLEX_02_CLK_PIN   	PINK
 #define SPI_FLEX_02_CLK_DDR   	DDRK
 #define SPI_FLEX_02_CLK_PORT  	PORTK
 
-#define SPI_FLEX_02_SDO		PK1
+#define SPI_FLEX_02_SDO		PK3
 #define SPI_FLEX_02_SDO_PIN   	PINK
 #define SPI_FLEX_02_SDO_DDR   	DDRK
 #define SPI_FLEX_02_SDO_PORT  	PORTK
 
-#define SPI_FLEX_02_nCS		PK0
+#define SPI_FLEX_02_nCS		PK7
 #define SPI_FLEX_02_nCS_PIN   	PINK
 #define SPI_FLEX_02_nCS_DDR   	DDRK
 #define SPI_FLEX_02_nCS_PORT  	PORTK
 
-#define SPI_FLEX_02_DIS		PA1
+#define SPI_FLEX_02_DIS		PA3
 #define SPI_FLEX_02_DIS_PIN   	PINA
 #define SPI_FLEX_02_DIS_DDR   	DDRA
 #define SPI_FLEX_02_DIS_PORT  	PORTA
 
 // SPI_FLEX_03
-#define SPI_FLEX_AMO1_IOUT	0x03
+#define SPI_FLEX_AMO2_VILM	0x03
 
-#define SPI_FLEX_03_CLK		PK2
+#define SPI_FLEX_03_CLK		PK1
 #define SPI_FLEX_03_CLK_PIN   	PINK
 #define SPI_FLEX_03_CLK_DDR   	DDRK
 #define SPI_FLEX_03_CLK_PORT  	PORTK
 
-#define SPI_FLEX_03_SDO		PK1
+#define SPI_FLEX_03_SDO		PK3
 #define SPI_FLEX_03_SDO_PIN   	PINK
 #define SPI_FLEX_03_SDO_DDR   	DDRK
 #define SPI_FLEX_03_SDO_PORT  	PORTK
 
-#define SPI_FLEX_03_nCS		PK4
-#define SPI_FLEX_03_nCS_PIN   	PINK
-#define SPI_FLEX_03_nCS_DDR   	DDRK
-#define SPI_FLEX_03_nCS_PORT  	PORTK
+#define SPI_FLEX_03_nCS		PA1
+#define SPI_FLEX_03_nCS_PIN   	PINA
+#define SPI_FLEX_03_nCS_DDR   	DDRA
+#define SPI_FLEX_03_nCS_PORT  	PORTA
 
-#define SPI_FLEX_03_DIS		PA5
+#define SPI_FLEX_03_DIS		PA3
 #define SPI_FLEX_03_DIS_PIN   	PINA
 #define SPI_FLEX_03_DIS_DDR   	DDRA
 #define SPI_FLEX_03_DIS_PORT  	PORTA
+  
+// SPI_FLEX_04
+#define SPI_FLEX_AMO2_PID	0x04
 
+#define SPI_FLEX_04_CLK		PK1
+#define SPI_FLEX_04_CLK_PIN   	PINK
+#define SPI_FLEX_04_CLK_DDR   	DDRK
+#define SPI_FLEX_04_CLK_PORT  	PORTK
+
+#define SPI_FLEX_04_SDO		PK3
+#define SPI_FLEX_04_SDO_PIN   	PINK
+#define SPI_FLEX_04_SDO_DDR   	DDRK
+#define SPI_FLEX_04_SDO_PORT  	PORTK
+
+#define SPI_FLEX_04_nCS		PJ6
+#define SPI_FLEX_04_nCS_PIN   	PINJ
+#define SPI_FLEX_04_nCS_DDR   	DDRJ
+#define SPI_FLEX_04_nCS_PORT  	PORTJ
+
+#define SPI_FLEX_04_DIS		PJ4
+#define SPI_FLEX_04_DIS_PIN   	PINJ
+#define SPI_FLEX_04_DIS_DDR   	DDRJ
+#define SPI_FLEX_04_DIS_PORT  	PORTJ
+  
+// SPI_FLEX_05
+#define SPI_FLEX_AMO2_VPP	0x05
+
+#define SPI_FLEX_05_CLK		PK1
+#define SPI_FLEX_05_CLK_PIN   	PINK
+#define SPI_FLEX_05_CLK_DDR   	DDRK
+#define SPI_FLEX_05_CLK_PORT  	PORTK
+
+#define SPI_FLEX_05_SDO		PK3
+#define SPI_FLEX_05_SDO_PIN   	PINK
+#define SPI_FLEX_05_SDO_DDR   	DDRK
+#define SPI_FLEX_05_SDO_PORT  	PORTK
+  
+#define SPI_FLEX_05_SDI		PK5
+#define SPI_FLEX_05_SDI_PIN   	PINK
+#define SPI_FLEX_05_SDI_DDR   	DDRK
+#define SPI_FLEX_05_SDI_PORT  	PORTK
+
+#define SPI_FLEX_05_nCS		PA5
+#define SPI_FLEX_05_nCS_PIN   	PINA
+#define SPI_FLEX_05_nCS_DDR   	DDRA
+#define SPI_FLEX_05_nCS_PORT  	PORTA
+
+#define SPI_FLEX_05_DIS		PA7
+#define SPI_FLEX_05_DIS_PIN   	PINA
+#define SPI_FLEX_05_DIS_DDR   	DDRA
+#define SPI_FLEX_05_DIS_PORT  	PORTA
+  
 // setup
 void spi_flex_init(const unsigned char spi_n);
 void spi_flex_reset(const unsigned char spi_n);
