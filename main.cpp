@@ -35,6 +35,7 @@
 #include "ad5621.hpp"
 #include "ad5290.hpp"
 #include "max11100.hpp"
+#include "ad7921.hpp"
 #include "amo2.hpp"
 
 int main(void) {
@@ -99,6 +100,9 @@ int main(void) {
     }
     */
     
+    if (counter%500==0) {
+      amo2_temp = amo2_OUT_adc.readCounts();
+    }
     if (counter%100==0) {
       //amo1_readIOUTmA();
       //amo1_readVOUTmV();

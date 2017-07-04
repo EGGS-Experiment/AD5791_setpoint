@@ -165,6 +165,29 @@ extern "C" {
 #define SPI_FLEX_05_DIS_DDR   	DDRA
 #define SPI_FLEX_05_DIS_PORT  	PORTA
   
+// SPI_FLEX_06
+#define SPI_FLEX_AMO2_OUT	0x06
+
+#define SPI_FLEX_06_CLK		PH1
+#define SPI_FLEX_06_CLK_PIN   	PINH
+#define SPI_FLEX_06_CLK_DDR   	DDRH
+#define SPI_FLEX_06_CLK_PORT  	PORTH
+
+#define SPI_FLEX_06_SDO		PH0
+#define SPI_FLEX_06_SDO_PIN   	PINH
+#define SPI_FLEX_06_SDO_DDR   	DDRH
+#define SPI_FLEX_06_SDO_PORT  	PORTH
+
+#define SPI_FLEX_06_SDI		PH3
+#define SPI_FLEX_06_SDI_PIN   	PINH
+#define SPI_FLEX_06_SDI_DDR   	DDRH
+#define SPI_FLEX_06_SDI_PORT  	PORTH
+
+#define SPI_FLEX_06_nCS		PH2
+#define SPI_FLEX_06_nCS_PIN   	PINH
+#define SPI_FLEX_06_nCS_DDR   	DDRH
+#define SPI_FLEX_06_nCS_PORT  	PORTH
+  
 // setup
 void spi_flex_init(const unsigned char spi_n);
 void spi_flex_reset(const unsigned char spi_n);

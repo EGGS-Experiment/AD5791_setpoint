@@ -59,17 +59,39 @@
 #define AMO2_SW9_DDR   		DDRA
 #define AMO2_SW9_PORT  		PORTA
 
-AD5541 amo2_VT_dac(SPI_FLEX_AMO2_VT);
-AD5621 amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
-AD5290 amo2_PID_rpot(SPI_FLEX_AMO2_PID);
+#define AMO2_HEAT		PH6
+#define AMO2_HEAT_DDR   	DDRH
+#define AMO2_HEAT_PORT  	PORTH
+
+#define AMO2_GDRV_BOOST		PH7
+#define AMO2_GDRV_BOOST_DDR   	DDRH
+#define AMO2_GDRV_BOOST_PORT  	PORTH
+
+#define AMO2_TEMP_OK		PH4
+#define AMO2_TEMP_OK_PIN   	PINH
+#define AMO2_TEMP_OK_DDR   	DDRH
+#define AMO2_TEMP_OK_PORT  	PORTH
+
+#define AMO2_BRIDGE		PH5
+#define AMO2_BRIDGE_PIN   	PINH
+#define AMO2_BRIDGE_DDR   	DDRH
+#define AMO2_BRIDGE_PORT  	PORTH
+
+AD5541   amo2_VT_dac(SPI_FLEX_AMO2_VT);
+AD5621   amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
+AD5290   amo2_PID_rpot(SPI_FLEX_AMO2_PID);
 MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
+AD7921   amo2_OUT_adc(SPI_FLEX_AMO2_OUT);
+
 uint8_t   amo2_fault = 0;
+uint32_t  amo2_temp = 0;
 
 void amo2_init();
 void amo2_VT_init();
 void amo2_VILM_init();
 void amo2_PID_init();
 void amo2_VPP_init();
+void amo2_OUT_init();
 
 // Screen
 #define AMO6_CLEO_nPWR		PG0
@@ -149,16 +171,17 @@ void amo2_init()
   // hardware i/o config
   AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR);//output
   AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
+  
   AMO2_PWR_nOK_DDR  &= ~_BV(AMO2_PWR_nOK); //input
   AMO2_PWR_nOK_PORT &= ~_BV(AMO2_PWR_nOK); //disable pullup
   amo2_VT_dac.init();
   amo2_VILM_dac.init();
   amo2_PID_rpot.init();
   amo2_VPP_adc.init();
+  amo2_OUT_adc.init();
   AMO2_SW1_DDR  |=  _BV(AMO2_SW1); //output
   AMO2_SW1_PORT &= ~_BV(AMO2_SW1); //0
   AMO2_SW2_DDR  |=  _BV(AMO2_SW2); //output
-  //AMO2_SW2_PORT &= ~_BV(AMO2_SW2); //0
   AMO2_SW2_PORT |=  _BV(AMO2_SW2); //1
   AMO2_SW3_DDR  |=  _BV(AMO2_SW3); //output
   AMO2_SW3_PORT &= ~_BV(AMO2_SW3); //0
@@ -174,10 +197,20 @@ void amo2_init()
   AMO2_SW8_PORT &= ~_BV(AMO2_SW8); //0
   AMO2_SW9_DDR  |=  _BV(AMO2_SW9); //output
   AMO2_SW9_PORT &= ~_BV(AMO2_SW9); //0
+  
+  AMO2_HEAT_DDR |=  _BV(AMO2_HEAT);  //output
+  AMO2_HEAT_PORT &= ~_BV(AMO2_HEAT); //0
+  AMO2_GDRV_BOOST_DDR |=  _BV(AMO2_GDRV_BOOST);  //output
+  AMO2_GDRV_BOOST_PORT &= ~_BV(AMO2_GDRV_BOOST); //0
+  AMO2_TEMP_OK_DDR  &= ~_BV(AMO2_TEMP_OK); //input
+  AMO2_TEMP_OK_PORT &= ~_BV(AMO2_TEMP_OK); //disable pullup
+  AMO2_BRIDGE_DDR  &= ~_BV(AMO2_BRIDGE); //input
+  AMO2_BRIDGE_PORT &= ~_BV(AMO2_BRIDGE); //disable pullup
+  
   AMO6_EXT1_nEN_DDR  |=  _BV(AMO6_EXT1_nEN); //output
   AMO6_EXT1_nEN_PORT &= ~_BV(AMO6_EXT1_nEN); //0
   AMO6_EXT2_nEN_DDR  |=  _BV(AMO6_EXT2_nEN); //output
-  AMO6_EXT2_nEN_PORT |=  _BV(AMO6_EXT2_nEN); //1
+  AMO6_EXT2_nEN_PORT &= ~_BV(AMO6_EXT2_nEN); //0
   AMO6_BUZZER_nEN_DDR  |=  _BV(AMO6_BUZZER_nEN); //output
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
   
@@ -186,6 +219,7 @@ void amo2_init()
   amo2_VILM_init();
   amo2_PID_init();
   amo2_VPP_init();
+  amo2_OUT_init();
   amo2_screen_init();
 //  _delay_ms(5000);
 }
@@ -202,14 +236,19 @@ void amo2_VILM_init()
 
 void amo2_PID_init()
 {
-//  amo2_PID_rpot.setCounts(0x000000); //low
-//  amo2_PID_rpot.setCounts(0x808080); //mid
-//  amo2_PID_rpot.setCounts(0xFFFFFF); //high
-//  amo2_PID_rpot.setCounts(0xFF8000);
+  //amo2_PID_rpot.setCounts(0x000000); //low
+  //amo2_PID_rpot.setCounts(0x808080); //mid
+  //amo2_PID_rpot.setCounts(0xFFFFFF); //high
+  //amo2_PID_rpot.setCounts(0xFF8000);
 }
 
 void amo2_VPP_init()
 {
+}
+
+void amo2_OUT_init()
+{
+  amo2_OUT_adc.readCounts();
 }
 
 // Screen
@@ -320,7 +359,8 @@ void amo2_screen_draw()
     if (amo1_screen_on) {
       //sprintf(buf_on_off, "%1lu.%02luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
 //      sprintf(buf_on_off, "%0.2fV, %lumA", amo1_vout_mv/1000.0, amo1_iout_ma);
-      sprintf(buf_on_off, "%u", amo2_VPP_adc.readCounts());
+      //sprintf(buf_on_off, "%u", amo2_VPP_adc.readCounts());
+      sprintf(buf_on_off, "%lu, %lu", ((amo2_temp >> 16)&0x0FFF), ((amo2_temp)&0x0FFF));
     }
     else if (amo2_fault == 1) sprintf(buf_on_off, "%s", "Max Current Fault");
     else if (amo2_fault == 2) sprintf(buf_on_off, "%s", "Diode Not Connected");
