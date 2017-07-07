@@ -93,6 +93,32 @@ void amo2_PID_init();
 void amo2_VPP_init();
 void amo2_OUT_init();
 
+//Encoder
+#define AMO6_ENCODER_A		PD2
+#define AMO6_ENCODER_A_PIN   	PIND
+#define AMO6_ENCODER_A_DDR   	DDRD
+#define AMO6_ENCODER_A_PORT  	PORTD
+#define AMO6_ENCODER_A_MSK	EIMSK
+#define AMO6_ENCODER_A_INT	INT2
+#define AMO6_ENCODER_A_EICR	EICRA
+#define AMO6_ENCODER_A_ISC0	ISC20
+#define AMO6_ENCODER_A_ISC1	ISC21
+
+#define AMO6_ENCODER_B		PD1
+#define AMO6_ENCODER_B_PIN   	PIND
+#define AMO6_ENCODER_B_DDR   	DDRD
+#define AMO6_ENCODER_B_PORT  	PORTD
+#define AMO6_ENCODER_B_MSK	EIMSK
+#define AMO6_ENCODER_B_INT	INT1
+#define AMO6_ENCODER_B_EICR	EICRA
+#define AMO6_ENCODER_B_ISC0	ISC10
+#define AMO6_ENCODER_B_ISC1	ISC11
+
+static int16_t amo2_encoder_val = 0;   //encoder value
+
+void amo2_encoder_init();
+void amo2_encoder_read();
+
 // Screen
 #define AMO6_CLEO_nPWR		PG0
 #define AMO6_CLEO_nPWR_DDR	DDRG
@@ -221,21 +247,25 @@ void amo2_init()
   amo2_VPP_init();
   amo2_OUT_init();
   amo2_screen_init();
+  amo2_encoder_init();
 //  _delay_ms(5000);
 }
 
 void amo2_VT_init()
 {
-  amo2_VT_dac.setCounts(32768); //mid
+  //Testing
+  //amo2_VT_dac.setCounts(32768); //mid
 }
 
 void amo2_VILM_init()
 {
-//  amo2_VILM_dac.setCounts(2048); //mid
+  //Testing
+  //amo2_VILM_dac.setCounts(2048); //mid
 }
 
 void amo2_PID_init()
 {
+  //Testing
   //amo2_PID_rpot.setCounts(0x000000); //low
   //amo2_PID_rpot.setCounts(0x808080); //mid
   //amo2_PID_rpot.setCounts(0xFFFFFF); //high
@@ -249,6 +279,32 @@ void amo2_VPP_init()
 void amo2_OUT_init()
 {
   amo2_OUT_adc.readCounts();
+}
+
+// Encoder
+void amo2_encoder_init()
+{
+  AMO6_ENCODER_A_DDR    &= ~_BV(AMO6_ENCODER_A);       //input
+  AMO6_ENCODER_A_PORT   |=  _BV(AMO6_ENCODER_A);       //enable pullup
+  AMO6_ENCODER_A_EICR   |=  _BV(AMO6_ENCODER_A_ISC0);  //enable pin change interrupt
+  AMO6_ENCODER_A_MSK    |=  _BV(AMO6_ENCODER_A_INT);   //enable pin as interrupt source
+  
+  AMO6_ENCODER_B_DDR    &= ~_BV(AMO6_ENCODER_B);       //input
+  AMO6_ENCODER_B_PORT   |=  _BV(AMO6_ENCODER_B);       //enable pullup
+  AMO6_ENCODER_B_EICR   |=  _BV(AMO6_ENCODER_B_ISC0);  //enable pin change interrupt
+  AMO6_ENCODER_B_MSK    |=  _BV(AMO6_ENCODER_B_INT);   //enable pin as interrupt source
+}
+
+ISR(INT2_vect, ISR_ALIASOF(INT5_vect)); //map ENCODER_A to unused INT5
+ISR(INT1_vect, ISR_ALIASOF(INT5_vect)); //map ENCODER_B to unused INT5
+ISR(INT5_vect)
+{
+  static uint8_t old_AB = 0;  //lookup table index  
+  static const int8_t enc_states[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};  //encoder lookup table
+  
+  old_AB <<= 2;  //store previous state
+  old_AB |= (  ( (((AMO6_ENCODER_A_PIN>>AMO6_ENCODER_A)&0x01)<<1) | ((AMO6_ENCODER_B_PIN>>AMO6_ENCODER_B)&0x01) )  &  0x03  ); //add current state
+  amo2_encoder_val += enc_states[( old_AB & 0x0f )];
 }
 
 // Screen
@@ -357,10 +413,8 @@ void amo2_screen_draw()
     CleO.RectangleColor(amo1_screen_on ? MY_GREEN : MY_RED);
     CleO.RectangleXY(240, 280, AMO1_SCREEN_WIDTH, 80);
     if (amo1_screen_on) {
-      //sprintf(buf_on_off, "%1lu.%02luV, %03lumA", amo1_vout_mv/1000, amo1_vout_mv%1000, amo1_iout_ma);
-//      sprintf(buf_on_off, "%0.2fV, %lumA", amo1_vout_mv/1000.0, amo1_iout_ma);
-      //sprintf(buf_on_off, "%u", amo2_VPP_adc.readCounts());
-      sprintf(buf_on_off, "%lu, %lu", ((amo2_temp >> 16)&0x0FFF), ((amo2_temp)&0x0FFF));
+      amo2_temp=amo2_OUT_adc.readCounts(); //amo2_out_vfet & amo2_out_vitec
+      sprintf(buf_on_off, "%u, %lu, %lu, %d", amo2_VPP_adc.readCounts(), ((amo2_temp >> 16)&0x0FFF), ((amo2_temp)&0x0FFF), amo2_encoder_val); 
     }
     else if (amo2_fault == 1) sprintf(buf_on_off, "%s", "Max Current Fault");
     else if (amo2_fault == 2) sprintf(buf_on_off, "%s", "Diode Not Connected");

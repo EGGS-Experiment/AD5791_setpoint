@@ -26,7 +26,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
-//#include "serial_console.h"
+#include "serial_console.h"
 #include "led.h"
 #include "spi_flex.h"
 
@@ -63,7 +63,7 @@ int main(void) {
   // finally: turn on interrupts
   // ////////////////////////////////////////////////////////////////////////
 
-//  sei();
+  sei();
 
   // ////////////////////////////////////////////////////////////////////////
   // main program loop
@@ -100,9 +100,6 @@ int main(void) {
     }
     */
     
-    if (counter%500==0) {
-      amo2_temp = amo2_OUT_adc.readCounts();
-    }
     if (counter%100==0) {
       //amo1_readIOUTmA();
       //amo1_readVOUTmV();
@@ -120,7 +117,7 @@ int main(void) {
     }
     
     if (no_op) _delay_ms(1);
-    else       no_op=1;
+    else no_op=1;
     counter++;
   }
 

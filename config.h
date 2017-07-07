@@ -41,7 +41,7 @@
 #define SERIAL_ECHO_ON     0
 
 // use interrupt-based RX (enabled, if macro is defined)
-#define SERIAL_RX_INTERRUPT 1
+//#define SERIAL_RX_INTERRUPT 1
 
 // default size of serial buffer; only for interrupt based RX
 // (maximum allowed size: 255)
