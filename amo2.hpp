@@ -93,9 +93,9 @@ void amo2_PID_init();
 void amo2_VPP_init();
 void amo2_OUT_init();
 
-//Encoder
-static int16_t amo6_encoder_val = 0;   //encoder value
-void amo6_encoder_init();
+// Buttons
+static int16_t amo6_encoder_val = 0;
+void amo6_buttons_init();
 
 // Screen
 #define AMO6_CLEO_nPWR		PG0
@@ -225,7 +225,7 @@ void amo2_init()
   amo2_VPP_init();
   amo2_OUT_init();
   amo2_screen_init();
-  amo6_encoder_init();
+  amo6_buttons_init();
 //  _delay_ms(5000);
 }
 
@@ -260,24 +260,38 @@ void amo2_OUT_init()
   //amo2_OUT_adc.readCounts();
 }
 
-// Encoder
-void amo6_encoder_init()
+// Buttons
+void amo6_buttons_init()
 {
-  // ENCODER_A
+  // ENC_A
   DDRD   &= ~_BV(PD2);   //input
   PORTD  |=  _BV(PD2);   //enable pullup
-  EICRA  |=  _BV(ISC20); //enable pin change interrupt
-  EIMSK  |=  _BV(INT2);  //enable pin as interrupt source
+  EICRA  |=  _BV(ISC20); //enable any edge interrupt
+  EIMSK  |=  _BV(INT2);  //enable interrupt
 
-  // ENCODER_B
+  // ENC_B
   DDRD   &= ~_BV(PD1);   //input
   PORTD  |=  _BV(PD1);   //enable pullup
-  EICRA  |=  _BV(ISC10); //enable pin change interrupt
-  EIMSK  |=  _BV(INT1);  //enable pin as interrupt source
+  EICRA  |=  _BV(ISC10); //enable any edge interrupt
+  EIMSK  |=  _BV(INT1);  //enable interrupt
+  
+  // ENC_SW
+  DDRD   &= ~_BV(PD3);   //input
+  PORTD  |=  _BV(PD3);   //enable pullup
+  EICRA  |=  _BV(ISC31); //enable falling edge interrupt
+  EIMSK  |=  _BV(INT3);  //enable interrupt
+  
+  // SW1
+  DDRB   &= ~_BV(PB6);   //input
+  PORTB  |=  _BV(PB6);   //enable pullup
+  
+  // SW2
+  DDRB   &= ~_BV(PB5);   //input
+  PORTB  |=  _BV(PB5);   //enable pullup
 }
 
-ISR(INT2_vect, ISR_ALIASOF(INT5_vect)); //map ENCODER_A to unused INT5
-ISR(INT1_vect, ISR_ALIASOF(INT5_vect)); //map ENCODER_B to unused INT5
+ISR(INT2_vect, ISR_ALIASOF(INT5_vect)); //map ENC_A to unused INT5
+ISR(INT1_vect, ISR_ALIASOF(INT5_vect)); //map ENC_B to unused INT5
 ISR(INT5_vect)
 {
   static uint8_t old_AB = 0;  //lookup table index  
@@ -286,6 +300,10 @@ ISR(INT5_vect)
   old_AB <<= 2;  //store previous state
   old_AB |= (  ( (((PIND>>PD2)&0x01)<<1) | ((PIND>>PD1)&0x01) )  &  0x03  ); //add current state
   amo6_encoder_val += enc_states[( old_AB & 0x0f )];
+}
+
+ISR(INT3_vect) //ENC_SW
+{
 }
 
 // Screen
