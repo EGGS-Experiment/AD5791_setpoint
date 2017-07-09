@@ -186,6 +186,7 @@ void amo2_screen_debug();
 void amo2_screen_init();
 void amo2_screen_refresh();
 void amo2_screen_draw();
+void amo2_screen_touch();
 void amo2_screen_processButtons();
 void amo2_screen_shortPress (bool *press_detected);
 void amo2_screen_processShortPress();
@@ -420,13 +421,13 @@ void amo2_screen_init()
   _delay_ms(1000);
   AMO6_CLEO_nPWR_PORT &= ~_BV(AMO6_CLEO_nPWR); //0
   _delay_ms(1000);
+  
   CleO.begin();
-  CleO.Display(100);
+  CleO.Display(100); //brightness max=255
   CleO.Start();
   CleO.RectangleJustification(MM);
   CleO.SetBackgroundcolor(0xe9d3ebUL);
   sprintf(buf_text,"TEC Temperature Controller");
-  
   CleO.StringExt(FONT_SANS_4, AMO1_SCREEN_WIDTH/2, 30, amo1_screen_text_color, MM, 0, 0, buf_text);
   sprintf(buf_text,"Device ID : AMO2");
   CleO.StringExt(FONT_BIT_3, 10, 100, amo1_screen_text_color, ML, 0, 0, buf_text);
@@ -434,42 +435,20 @@ void amo2_screen_init()
   CleO.StringExt(FONT_BIT_3 , 10 , 120 , amo1_screen_text_color , ML , 0 , 0, buf_text);
   sprintf(buf_text,"Firmware ID : 0.0.0");
   CleO.StringExt(FONT_BIT_3, 10, 140, amo1_screen_text_color, ML, 0, 0, buf_text);
-  
 //  sprintf(buf_text,"%lu,%2.2f,%0.5f,%lu", amo1_iout_max_set_ua/1000, amo1_iout_res, amo1_iout_ua_to_cnts, amo1_pfet_max_mw);
   CleO.StringExt(FONT_BIT_3, 10, 180, amo1_screen_text_color, ML, 0, 0, buf_text);
-  
   sprintf(buf_text,"Starting Up ... ");
   CleO.StringExt(FONT_BIT_4 , 10 , 220 , amo1_screen_text_color , ML , 0 , 0, buf_text);
   CleO.Show();
+  
   CleO.DisplayRotate(2, 0);
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
 }
 
 void amo2_screen_refresh()
 {
-    //------------------------------------------------------------------------------------------------------------------
-    // Start Drawing Screen
-    //------------------------------------------------------------------------------------------------------------------
-    CleO.Start();
-
-    //------------------------------------------------------------------------------------------------------------------
-    // Build Keypads / Status Screens
-    //------------------------------------------------------------------------------------------------------------------
-    CleO.RectangleJustification(MM);
-    CleO.LineColor(amo1_screen_line_color);
     amo2_screen_draw();
-
-    //------------------------------------------------------------------------------------------------------------------
-    // Collect Tags
-    //------------------------------------------------------------------------------------------------------------------
-    if (amo2_fault==0) {
-      amo2_screen_processButtons();
-      if (amo1_screen_short_press_detected) amo2_screen_processShortPress();
-    }
-    //------------------------------------------------------------------------------------------------------------------
-    // Update Screen
-    //------------------------------------------------------------------------------------------------------------------
-    CleO.Show();
+    amo2_screen_touch();
 }
 
 void amo2_screen_draw()
@@ -481,6 +460,13 @@ void amo2_screen_draw()
     char* output_digit = &temp;
     char digit[1];
     char buf_on_off[15] = "OFF";
+    
+    //------------------------------------------------------------------------------------------------------------------
+    // Start Drawing Screen
+    //------------------------------------------------------------------------------------------------------------------
+    CleO.Start();
+    CleO.RectangleJustification(MM);
+    CleO.LineColor(amo1_screen_line_color);
 
     //------------------------------------------------------------------------------------------------------------------
     // Digits Box
@@ -560,17 +546,32 @@ void amo2_screen_draw()
     for (int i = 1; i < 4; i+=2)
         CleO.Line(0, AMO1_SCREEN_HEIGHT*i/4, AMO1_SCREEN_WIDTH, AMO1_SCREEN_HEIGHT*i/4);
         CleO.Line(0, AMO1_SCREEN_HEIGHT/2, amo1_screen_locationX[12], AMO1_SCREEN_HEIGHT/2);
-   // arrow lines
+    // arrow lines
     for (int i = 1; i < 7; ++i)
         CleO.Line(amo1_screen_locationX[2*i], AMO1_SCREEN_HEIGHT/4, amo1_screen_locationX[2*i], 3*AMO1_SCREEN_HEIGHT/4);
+    
+    //------------------------------------------------------------------------------------------------------------------
+    // Update Screen
+    //------------------------------------------------------------------------------------------------------------------
+    CleO.Show();
+}
+
+void amo2_screen_touch()
+{
+  if (amo2_fault==0) {
+    amo2_screen_processButtons();
+    if (amo1_screen_short_press_detected) amo2_screen_processShortPress();
+  }
 }
 
 void amo2_screen_processButtons()
 {
-    //NOTE: for more than 13 tags, you must manually tag!
+    // Collet Tags
+     //NOTE: for more than 13 tags, you must manually tag!
     CleO.TouchCoordinates(amo1_screen_x, amo1_screen_y, amo1_screen_current_dur, amo1_screen_current_tag);
+    
+    // Process Short Press
     amo2_screen_shortPress(&amo1_screen_short_press_detected);
-
     amo1_screen_last_dur = amo1_screen_current_dur;
     if (amo1_screen_current_tag == 13){
         if (amo1_screen_toggle_on){
