@@ -166,7 +166,7 @@ extern "C" {
 #define SPI_FLEX_05_DIS_PORT  	PORTA
   
 // SPI_FLEX_06
-#define SPI_FLEX_AMO2_OUT	0x06
+#define SPI_FLEX_AMO2_FET	0x06
 
 #define SPI_FLEX_06_CLK		PH1
 #define SPI_FLEX_06_CLK_PIN   	PINH

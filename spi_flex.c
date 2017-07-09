@@ -132,7 +132,7 @@ void spi_flex_init(const unsigned char spi_n) {
     SPI_FLEX_05_SDI_DDR  &= ~_BV(SPI_FLEX_05_SDI); //input
     SPI_FLEX_05_SDI_PORT &= ~_BV(SPI_FLEX_05_SDI); //disable pullup
   }
-  else if (spi_n == SPI_FLEX_AMO2_OUT) { //SPI_MODE2
+  else if (spi_n == SPI_FLEX_AMO2_FET) { //SPI_MODE2
     _delay_ms(100);
    
     SPI_FLEX_06_nCS_DDR  |=  _BV(SPI_FLEX_06_nCS); //output
@@ -191,7 +191,7 @@ void spi_flex_sel(const unsigned char spi_n) {
     SPI_FLEX_05_CLK_PORT &= ~_BV(SPI_FLEX_05_CLK); //0
     SPI_FLEX_05_nCS_PORT &= ~_BV(SPI_FLEX_05_nCS); //0
   }
-  else if (spi_n == SPI_FLEX_AMO2_OUT) { //SPI_MODE2
+  else if (spi_n == SPI_FLEX_AMO2_FET) { //SPI_MODE2
     //_delay_loop_1(1);
     SPI_FLEX_06_CLK_PORT |=  _BV(SPI_FLEX_06_CLK); //1
     SPI_FLEX_06_nCS_PORT &= ~_BV(SPI_FLEX_06_nCS); //0
@@ -231,7 +231,7 @@ void spi_flex_usel(const unsigned char spi_n) {
     //_delay_loop_1(1);
     //SPI_FLEX_04_DIS_PORT |=  _BV(SPI_FLEX_04_DIS); //1
   }
-  else if (spi_n == SPI_FLEX_AMO2_OUT) { //SPI_MODE2
+  else if (spi_n == SPI_FLEX_AMO2_FET) { //SPI_MODE2
     SPI_FLEX_06_CLK_PORT |=  _BV(SPI_FLEX_06_CLK); //1
     SPI_FLEX_06_nCS_PORT |=  _BV(SPI_FLEX_06_nCS); //1
     //_delay_loop_1(1);
@@ -348,7 +348,7 @@ static inline unsigned char __spi_flex_read_write_bit(const unsigned char spi_n,
     SPI_FLEX_01_CLK_PORT &= ~_BV(SPI_FLEX_01_CLK); //0
     return rbit;
   }
-  else if (spi_n == SPI_FLEX_AMO2_OUT) { //SPI_MODE2
+  else if (spi_n == SPI_FLEX_AMO2_FET) { //SPI_MODE2
     if (bit)
       SPI_FLEX_06_SDO_PORT |=  _BV(SPI_FLEX_06_SDO); //1
     else
