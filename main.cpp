@@ -100,19 +100,24 @@ int main(void) {
     }
     */
     
+    if (counter%250==0) {
+//      amo1_setOUT();
+      no_op=0;
+    }
+    
     if (counter%100==0) {
+      amo2_screen_refresh();
+      no_op=0;
+    }
+    
+    if (counter%90==0) {
       //amo1_readIOUTmA();
       //amo1_readVOUTmV();
 //      amo1_adjVDD1();
 //      amo1_processFault();
-      no_op=0;
-    }
-    if (counter%100==0) {
-//      amo1_setOUT();
-      no_op=0;
-    }
-    if (counter%50==0) {
-      amo2_screen_refresh();
+      amo2_VPP_read_uv();
+      amo2_VPP_read_degC();
+      amo2_FET_read_mw();
       no_op=0;
     }
     
