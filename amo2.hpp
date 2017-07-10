@@ -527,8 +527,9 @@ void amo2_screen_draw()
   CleO.RectangleColor(amo2_screen_select[amo2_screen_sensor_temp_tag] ? MY_GREEN : MY_YELLOW);
   CleO.RectangleXY(200, AMO6_SCREEN_ROW2_Y, 200, AMO6_SCREEN_ROW2_H);
   //sprintf(text_buf, "%lu", amo2_vpp_uv);
-  sprintf(text_buf, "%3.3f", amo2_vpp_degC);
-  CleO.StringExt(FONT_SANS_4 , 200, AMO6_SCREEN_ROW2_Y, amo1_screen_text_color , MM , 0 , 0, text_buf);
+  sprintf(text_buf, "%3.3f  C", amo2_vpp_degC);
+  CleO.StringExt(FONT_SANS_4 , 300-20, AMO6_SCREEN_ROW2_Y, amo1_screen_text_color, MR, 0, 0, text_buf);
+  CleO.CircleExt(300-50, AMO6_SCREEN_ROW2_Y-15, 2, 3, amo1_screen_text_color, MR, 0, 0);
   CleO.Line(300, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 300, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // TEC iLimit
