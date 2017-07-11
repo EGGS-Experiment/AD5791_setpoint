@@ -77,65 +77,77 @@
 #define AMO2_BRIDGE_DDR   	DDRH
 #define AMO2_BRIDGE_PORT  	PORTH
 
-//AMO2
+// AMO2
 uint8_t   amo2_fault = 0;
 uint32_t  amo2_temp = 0;
-void amo2_init();
-void amo2_process_fault();
+void amo2_init ();
+void amo2_process_fault ();
+void amo2_execute ();
 
-//VT
+// VT
 const float amo2_vt_uv_to_cnts = 0.0131072;
+uint16_t amo2_vt_cnts_max = 65535;
 uint32_t amo2_vt_uv = 123456;
+double amo2_vt_degC = 25;
+double amo2_vt_degC_prev = 0;
 AD5541   amo2_VT_dac(SPI_FLEX_AMO2_VT);
-void amo2_VT_init();
-void amo2_VT_set_uv(uint32_t val);
-void amo2_screen_temp_set(uint8_t action);
+void amo2_VT_init ();
+void amo2_VT_set_uv (uint32_t val);
+void amo2_VT_set_degC (float degC);
 
-//VILM
+// VILM
 const float amo2_vilm_ma_to_cnts = 0.65536;
 uint16_t amo2_vilm_ma = 123;
+double amo2_vilm_amps = 0;
+double amo2_vilm_amps_prev = 0;
 AD5621   amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
-void amo2_VILM_init();
-void amo2_VILM_set_ma(uint16_t val);
-//PID
-uint8_t amo2_pid_p=255;
-uint8_t amo2_pid_i=255;
-uint8_t amo2_pid_d=0;
-AD5290   amo2_PID_rpot(SPI_FLEX_AMO2_PID);
-void amo2_PID_init();
-void amo2_PID_set_cnts(uint8_t p, uint8_t i, uint8_t d);
+void amo2_VILM_init ();
+void amo2_VILM_set_ma (uint16_t val);
 
-//VPp
+// PID
+uint8_t amo2_pid_p=128;
+uint8_t amo2_pid_p_prev = 0;
+uint8_t amo2_pid_i=128;
+uint8_t amo2_pid_i_prev = 0;
+uint8_t amo2_pid_d=128;
+uint8_t amo2_pid_d_prev = 0;
+AD5290   amo2_PID_rpot(SPI_FLEX_AMO2_PID);
+void amo2_PID_init ();
+void amo2_PID_set_cnts (uint8_t p, uint8_t i, uint8_t d);
+
+// VPp
 const float amo2_vpp_cnts_to_uv = 76.29395;
 uint16_t amo2_vpp_cnts_max = 65535;
 uint32_t amo2_vpp_uv = 0;
 double amo2_vpp_degC = 0;
 MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
 void amo2_VPP_init();
-uint32_t amo2_VPP_read_uv();
-double amo2_VPP_read_degC();
+uint32_t amo2_VPP_read_uv ();
+double amo2_VPP_read_degC ();
 
-//FET
-const float amo2_fet_cnts_to_mv = 4.34593;
-const float amo2_fet_cnts_to_ma = 3.476743;
-uint16_t amo2_fet_mv;
-uint16_t amo2_fet_ma;
+// FET
+const float amo2_fet_cnts_to_mv = 3.476743;
+const float amo2_fet_cnts_to_ma = 4.34593;
+uint32_t amo2_fet_mv;
+uint32_t amo2_fet_ma;
 uint32_t amo2_fet_mw;
+bool amo2_fet_bridge;
 AD7921   amo2_FET_adc(SPI_FLEX_AMO2_FET);
-void amo2_FET_init();
-uint32_t amo2_FET_read();
+void amo2_FET_init ();
+uint32_t amo2_FET_read ();
+uint32_t amo2_FET_read_mw ();
 
-//Heater
+// Heater
 
-//Boost
+// Boost
 
-//Buttons
-static int16_t amo6_encoder_val = 0;
+// Buttons
+static int8_t amo6_encoder_val = 0;
 //static char amo2_sw1_pushed = 0;
 //static char amo2_sw2_pushed = 0;
-void amo6_buttons_init();
+void amo6_buttons_init ();
 
-//Screen
+// Screen
 #define AMO6_CLEO_nPWR		PG0
 #define AMO6_CLEO_nPWR_DDR	DDRG
 #define AMO6_CLEO_nPWR_PORT	PORTG
@@ -187,16 +199,16 @@ int amo1_screen_last_dur = 0;
 int16_t amo1_screen_current_tag;
 bool amo1_screen_short_press_detected = 0;
 
-void amo2_screen_debug();
-void amo2_screen_init();
-void amo2_screen_refresh();
-void amo2_screen_draw();
-void amo2_screen_touch();
-void amo2_screen_processButtons();
+void amo2_screen_debug ();
+void amo2_screen_init ();
+void amo2_screen_refresh ();
+void amo2_screen_draw ();
+void amo2_screen_touch ();
+void amo2_screen_processButtons ();
 void amo2_screen_shortPress (bool *press_detected);
-void amo2_screen_processShortPress();
+void amo2_screen_processShortPress ();
 
-bool amo2_screen_enable_sel = false;
+void amo2_screen_execute ();
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Implementation
@@ -266,7 +278,25 @@ void amo2_process_fault()
 {
 }
 
-// VT
+void amo2_execute()
+{
+  if((amo2_pid_p!=amo2_pid_p_prev)||(amo2_pid_i!=amo2_pid_i_prev)||(amo2_pid_d!=amo2_pid_d_prev)) {
+    amo2_PID_set_cnts(amo2_pid_p, amo2_pid_i, amo2_pid_d);
+    amo2_pid_p_prev=amo2_pid_p;
+    amo2_pid_i_prev=amo2_pid_i;
+    amo2_pid_d_prev=amo2_pid_d;
+  }
+  if(amo2_vt_degC!=amo2_vt_degC_prev) {
+    amo2_VT_set_degC(amo2_vt_degC);
+    amo2_vt_degC_prev=amo2_vt_degC;
+  }
+  if(amo2_vilm_amps!=amo2_vilm_amps_prev) {
+    amo2_VILM_set_ma(amo2_vilm_amps*1000);
+    amo2_vilm_amps_prev=amo2_vilm_amps;
+  }
+}
+
+//VT
 void amo2_VT_init()
 {
   amo2_VT_dac.setCounts(32768); //mid
@@ -285,7 +315,20 @@ void amo2_VT_set_uv(uint32_t val)
   amo2_VT_dac.setCounts(val);
 }
 
-// VILM
+void amo2_VT_set_degC(float degC)
+{
+  uint16_t r_ref = 20000;
+  float r25c = 10103.9;
+  float beta = 3813.85;
+  float r = r25c * exp(beta*(1/(degC+273.15)-1/298.15));
+  r = (r/r_ref+1);
+  if (r<1) r=1;
+  uint32_t counts = amo2_vt_cnts_max / r;
+  //amo2_temp = counts;
+  amo2_VT_dac.setCounts(counts);
+}
+
+//VILM
 void amo2_VILM_init()
 {
   amo2_VILM_dac.setCounts(0); //low
@@ -305,7 +348,7 @@ void amo2_VILM_set_ma(uint16_t val)
   amo2_VILM_dac.setCounts(val);
 }
 
-// PID
+//PID
 void amo2_PID_init()
 {
   amo2_PID_rpot.setCounts(0x000000); //low
@@ -313,6 +356,7 @@ void amo2_PID_init()
   // testing
   //amo2_PID_rpot.setCounts(0x000000); //low
   //amo2_PID_rpot.setCounts(0x808080); //mid
+  //amo2_PID_set_cnts(128, 128, 128); //mid
   //amo2_PID_rpot.setCounts(0xFFFFFF); //high
   //amo2_PID_rpot.setCounts(0xFF8000); //P=FF I=80 D=00
   //amo2_PID_rpot.setCounts(0x808000); //P=80 I=90 D=00
@@ -324,14 +368,15 @@ void amo2_PID_set_cnts(uint8_t p, uint8_t i, uint8_t d)
   amo2_pid_p = p;
   amo2_pid_i = i;
   amo2_pid_d = d;
-  uint32_t val = p & 0x0000FF;
-  val <<= 16;
-  val |= (i<<8);
-  val |= d;
+  uint32_t val = p & 0xFF;
+  val = val << 8;
+  val |= i & 0xFF;
+  val = val << 8;
+  val |= d & 0xFF; 
   amo2_PID_rpot.setCounts(val);
 }
 
-// VPp
+//VPp
 void amo2_VPP_init()
 {
 }
@@ -360,7 +405,7 @@ double amo2_VPP_read_degC()
   return amo2_vpp_degC;
 }
 
-// FET
+//FET
 void amo2_FET_init()
 {
   // testing
@@ -372,11 +417,12 @@ uint32_t amo2_FET_read_mw()
   uint32_t val = amo2_FET_adc.readCounts();
   amo2_fet_ma = (val & 0xFFF) * amo2_fet_cnts_to_ma;
   amo2_fet_mv = ((val>>16) & 0xFFF) * amo2_fet_cnts_to_mv;
-  amo2_fet_mw = amo2_fet_ma * amo2_fet_mv / 1000;
+  amo2_fet_mw = (amo2_fet_ma * amo2_fet_mv)/1000;
+  amo2_fet_bridge = (AMO2_BRIDGE_PIN >> AMO2_BRIDGE) & 0x01;
   return amo2_fet_mw;
 }
 
-// Buttons
+//Buttons
 void amo6_buttons_init()
 {
   // ENC_A
@@ -408,7 +454,7 @@ void amo6_buttons_init()
 
 ISR(INT2_vect, ISR_ALIASOF(INT5_vect)); //map ENC_A to unused INT5
 ISR(INT1_vect, ISR_ALIASOF(INT5_vect)); //map ENC_B to unused INT5
-ISR(INT5_vect)
+ISR(INT5_vect) //ENC_TURN
 {
   static uint8_t old_AB = 0;  //lookup table index  
   static const int8_t enc_states[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};  //encoder lookup table
@@ -422,7 +468,7 @@ ISR(INT3_vect) //ENC_SW
 {
 }
 
-// Screen
+//Screen
 void amo2_screen_debug()
 {
   printf("CleO Version = %d\n", CleO.Version());
@@ -443,7 +489,7 @@ void amo2_screen_init()
   _delay_ms(1000);
   
   CleO.begin();
-  CleO.Display(255); //brightness max=255
+  CleO.Display(100); //brightness max=255
   CleO.Start();
   CleO.RectangleJustification(MM);
   CleO.SetBackgroundcolor(0xe9d3ebUL);
@@ -482,7 +528,7 @@ void amo2_screen_refresh()
 
 void amo2_screen_draw()
 { 
-  char text_buf[15];
+  char text_buf[50];
     
   // Start Drawing Screen
   CleO.Start();
@@ -494,8 +540,8 @@ void amo2_screen_draw()
   CleO.Tag(amo2_screen_temp_set_tag);
   CleO.RectangleColor(amo2_screen_select[amo2_screen_temp_set_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(150, AMO6_SCREEN_ROW1_Y, 300, AMO6_SCREEN_ROW1_H);
-  sprintf(text_buf, "%6lu", amo2_vt_uv);
-  CleO.StringExt(FONT_SANS_7, 150, AMO6_SCREEN_ROW1_Y, amo1_screen_text_color, MM, 0, 0, text_buf);
+  sprintf(text_buf, "%02.3f C", amo2_vt_degC);
+  CleO.StringExt(FONT_SANS_6, 150, AMO6_SCREEN_ROW1_Y, amo1_screen_text_color, MM, 0, 0, text_buf);
   CleO.Line(300, 0, 300, AMO6_SCREEN_ROW1_H);
     
   // Temperature Min
@@ -527,17 +573,17 @@ void amo2_screen_draw()
   CleO.RectangleColor(amo2_screen_select[amo2_screen_sensor_temp_tag] ? MY_GREEN : MY_YELLOW);
   CleO.RectangleXY(200, AMO6_SCREEN_ROW2_Y, 200, AMO6_SCREEN_ROW2_H);
   //sprintf(text_buf, "%lu", amo2_vpp_uv);
-  sprintf(text_buf, "%3.3f  C", amo2_vpp_degC);
+  sprintf(text_buf, "%03.3f C", amo2_vpp_degC);
   CleO.StringExt(FONT_SANS_4 , 300-20, AMO6_SCREEN_ROW2_Y, amo1_screen_text_color, MR, 0, 0, text_buf);
-  //CleO.CircleExt(300-50, AMO6_SCREEN_ROW2_Y-15, 3, 4, amo1_screen_text_color, MM, 0, 0); //BUG: Froze the program
+  CleO.CircleExt(300-43, AMO6_SCREEN_ROW2_Y-15, 3, 4, amo1_screen_text_color, MM, 0, 0); //BUG: froze the program
   CleO.Line(300, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 300, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // TEC iLimit
   CleO.Tag(amo2_screen_tec_ilimit_tag);
   CleO.RectangleColor(amo2_screen_select[amo2_screen_tec_ilimit_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(390, AMO6_SCREEN_ROW2_Y, 180, AMO6_SCREEN_ROW2_H);
-  sprintf(text_buf, "%d", amo2_vilm_ma);
-  CleO.StringExt(FONT_SANS_6 , 390, AMO6_SCREEN_ROW2_Y, amo1_screen_text_color , MM , 0 , 0, text_buf);
+  sprintf(text_buf, "%1.1f A", amo2_vilm_amps);
+  CleO.StringExt(FONT_SANS_5 , 390, AMO6_SCREEN_ROW2_Y, amo1_screen_text_color , MM , 0 , 0, text_buf);
   CleO.Line(0, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2, AMO6_SCREEN_W, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // PID P
@@ -588,7 +634,7 @@ void amo2_screen_draw()
   CleO.RectangleColor(amo2_screen_select[amo2_screen_enable_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(240, AMO6_SCREEN_ROW4_Y, 480, AMO6_SCREEN_ROW4_H);
   //sprintf(text_buf, "%d", amo2_screen_enable_sel);
-  sprintf(text_buf, "%lu, %u, %u, %d", amo2_vpp_uv, amo2_fet_ma, amo2_fet_mv, amo6_encoder_val); 
+  sprintf(text_buf, "vf=%lu, if=%lu, mwf=%lu, heat=%d", amo2_fet_mv, amo2_fet_ma, amo2_fet_mw, amo2_fet_bridge); 
   CleO.StringExt(FONT_SANS_3 , 240, AMO6_SCREEN_ROW4_Y, amo1_screen_text_color , MM , 0 , 0, text_buf);
   
   // Update Screen
@@ -692,77 +738,68 @@ void amo2_screen_processShortPress() {
   }
 }
 
-void amo2_screen_temp_set(uint8_t action)
+void amo2_screen_execute() 
 {
+  int i;
+  float tmp;
+  
+  // encoder turn
+  static int8_t amo6_encoder_val_prev;
+  if (amo6_encoder_val_prev == amo6_encoder_val) {
+    amo6_encoder_val = 0;
+  }
+  else {
+    for (i=0;i<AMO2_SCREEN_TAGS-1;i++) {
+      if (amo2_screen_select[i]==1) break;
+    }
+    int8_t val = amo6_encoder_val - amo6_encoder_val_prev;
+    switch (i) {
+      case amo2_screen_temp_set_tag	:
+	tmp = amo2_vt_degC + val*0.1;
+	if (tmp>35) tmp=35;
+	if (tmp<-5) tmp=-5;
+	amo2_vt_degC = tmp;
+	break;
+      case amo2_screen_temp_min_tag	:
+	break;
+      case amo2_screen_temp_max_tag	:
+	break;
+      case amo2_screen_sensor_tag	:
+	break;
+      case amo2_screen_sensor_temp_tag	:
+	break;
+      case amo2_screen_tec_ilimit_tag	:
+	tmp = amo2_vilm_amps + val*0.1;
+	if (tmp>5) tmp=5;
+	if (tmp<0) tmp=0;
+	amo2_vilm_amps = tmp;
+	break;
+      case amo2_screen_pid_p_tag	:
+	tmp = amo2_pid_p + val;
+	if (tmp>255) tmp=255;
+	if (tmp<0) tmp=0;
+	amo2_pid_p = tmp;
+	break;
+      case amo2_screen_pid_i_tag	:
+	tmp = amo2_pid_i + val;
+	if (tmp>255) tmp=255;
+	if (tmp<0) tmp=0;
+	amo2_pid_i = tmp;
+	break;
+      case amo2_screen_pid_d_tag	:
+	tmp = amo2_pid_d + val;
+	if (tmp>255) tmp=255;
+	if (tmp<0) tmp=0;
+	amo2_pid_d = tmp;
+	break;
+      case amo2_screen_tec_heater_tag	:
+	break;
+      case amo2_screen_tec_boost_tag	:
+	break;
+    }
+    amo6_encoder_val_prev = 0;
+    amo6_encoder_val = 0;
+  }
 }
 
-/*
-void amo2_screen_increaseSetCurrent(int i)
-{
-    if (i < 0) {
-      return;
-    }
-    else if (i >= AMO1_SCREEN_NUM_OF_DIGITS){
-      amo1_screen_current[i-1] = 9;
-      return;
-    }
-    
-    else if (amo1_screen_current[AMO1_SCREEN_NUM_OF_DIGITS-1] >= 2) {
-      return;
-    }
-
-    ++amo1_screen_current[i];
-    if (amo1_screen_current[i] > 9)
-    {
-        amo1_screen_current[i] = 0;
-        amo2_screen_increaseSetCurrent(i + 1);
-    }
-	
-    if (amo2_screen_getCurrent() > amo1_iout_max_set_ua) {
-      amo1_screen_current[0]=0;
-      amo1_screen_current[1]=0;
-      amo1_screen_current[2]=0;
-      amo1_screen_current[3]=0;
-      amo1_screen_current[4]=0;
-      amo1_screen_current[5]=2;
-      return;
-    }
-
-}*/
-
-/*
-void amo2_screen_decreaseSetCurrent(int i)
-{
-    if (i >= AMO1_SCREEN_NUM_OF_DIGITS || i < 0) return;
-
-    --amo1_screen_current[i];
-    if (amo1_screen_current[i] < 0) {
-      if (i < (AMO1_SCREEN_NUM_OF_DIGITS-1)) {
-        if (amo1_screen_current[i+1]>0) {
-          amo1_screen_current[i]=9;
-          amo2_screen_decreaseSetCurrent(i+1);
-          return;
-        }
-      }
-      amo1_screen_current[i] = 0;
-    }
-}
-
-bool amo2_screen_isOn()
-{
-    return amo1_screen_on;
-}
-
-uint32_t amo2_screen_getCurrent()
-{
-    uint32_t total = 0;
-    uint32_t place = 1;
-    for (int i = 0; i < AMO1_SCREEN_NUM_OF_DIGITS; ++i)
-    {
-        total += place * amo1_screen_current[i];
-        place *= 10;
-    }
-    return total;
-}
-*/
 #endif // AMO2_H
