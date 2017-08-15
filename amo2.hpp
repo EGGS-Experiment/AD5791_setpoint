@@ -88,7 +88,7 @@ void amo2_execute ();
 const float amo2_vt_uv_to_cnts = 0.0131072;
 uint16_t amo2_vt_cnts_max = 65535;
 uint32_t amo2_vt_uv = 123456;
-double amo2_vt_degC = 25;
+double amo2_vt_degC = 20;
 double amo2_vt_degC_prev = 0;
 AD5541   amo2_VT_dac(SPI_FLEX_AMO2_VT);
 void amo2_VT_init ();
@@ -96,7 +96,7 @@ void amo2_VT_set_uv (uint32_t val);
 void amo2_VT_set_degC (float degC);
 
 // VILM
-const float amo2_vilm_ma_to_cnts = 0.65536;
+const float amo2_vilm_ma_to_cnts = 0.07091;
 uint16_t amo2_vilm_ma = 123;
 double amo2_vilm_amps = 0;
 double amo2_vilm_amps_prev = 0;
@@ -105,11 +105,11 @@ void amo2_VILM_init ();
 void amo2_VILM_set_ma (uint16_t val);
 
 // PID
-uint8_t amo2_pid_p=128;
+uint8_t amo2_pid_p=100;
 uint8_t amo2_pid_p_prev = 0;
-uint8_t amo2_pid_i=128;
+uint8_t amo2_pid_i=16;
 uint8_t amo2_pid_i_prev = 0;
-uint8_t amo2_pid_d=128;
+uint8_t amo2_pid_d=16;
 uint8_t amo2_pid_d_prev = 0;
 AD5290   amo2_PID_rpot(SPI_FLEX_AMO2_PID);
 void amo2_PID_init ();
@@ -127,7 +127,7 @@ double amo2_VPP_read_degC ();
 
 // FET
 const float amo2_fet_cnts_to_mv = 3.476743;
-const float amo2_fet_cnts_to_ma = 4.34593;
+const float amo2_fet_cnts_to_ma = 40.1657;
 uint32_t amo2_fet_mv;
 uint32_t amo2_fet_ma;
 uint32_t amo2_fet_mw;
@@ -143,8 +143,8 @@ uint32_t amo2_FET_read_mw ();
 
 // Buttons
 static int8_t amo6_encoder_val = 0;
-//static char amo2_sw1_pushed = 0;
-//static char amo2_sw2_pushed = 0;
+static bool amo6_sw1_pushed = false;
+static bool amo6_sw2_pushed = false;
 void amo6_buttons_init ();
 
 // Screen
@@ -300,6 +300,7 @@ void amo2_execute()
 void amo2_VT_init()
 {
   amo2_VT_dac.setCounts(32768); //mid
+  //amo2_VT_dac.setCounts(0); //offset test
   
   // testing
   //amo2_VT_dac.setcounts(0);     //low
@@ -324,8 +325,8 @@ void amo2_VT_set_degC(float degC)
   r = (r/r_ref+1);
   if (r<1) r=1;
   uint32_t counts = amo2_vt_cnts_max / r;
-  //amo2_temp = counts;
   amo2_VT_dac.setCounts(counts);
+  //amo2_VT_dac.setCounts(0); //offset test
 }
 
 //VILM
@@ -428,28 +429,36 @@ void amo6_buttons_init()
   // ENC_A
   DDRD   &= ~_BV(PD2);   //input
   PORTD  |=  _BV(PD2);   //enable pullup
+  EICRA  &= ~_BV(ISC21); //enable any edge interrupt
   EICRA  |=  _BV(ISC20); //enable any edge interrupt
   EIMSK  |=  _BV(INT2);  //enable interrupt
 
   // ENC_B
   DDRD   &= ~_BV(PD1);   //input
   PORTD  |=  _BV(PD1);   //enable pullup
+  EICRA  &= ~_BV(ISC11); //enable any edge interrupt
   EICRA  |=  _BV(ISC10); //enable any edge interrupt
-  EIMSK  |=  _BV(INT1);  //enable interrupt
+  EIMSK  |=  _BV(INT1);  //enable interrupt for the pin
   
   // ENC_SW
   DDRD   &= ~_BV(PD3);   //input
   PORTD  |=  _BV(PD3);   //enable pullup
   EICRA  |=  _BV(ISC31); //enable falling edge interrupt
-  EIMSK  |=  _BV(INT3);  //enable interrupt
+  EICRA  &= ~_BV(ISC30); //enable falling edge interrupt
+  EIMSK  |=  _BV(INT3);  //enable interrupt for the pin
   
   // SW1
   DDRB   &= ~_BV(PB6);   //input
   PORTB  |=  _BV(PB6);   //enable pullup
+  PCICR  |=  _BV(PCIE0); //enable pin change interrupt enable 0
+  PCMSK0 |=  _BV(PCINT6);//enable interrupt for the pin
   
   // SW2
   DDRB   &= ~_BV(PB5);   //input
   PORTB  |=  _BV(PB5);   //enable pullup
+  PCICR  |=  _BV(PCIE0); //enable pin change interrupt enable 0
+  PCMSK0 |=  _BV(PCINT5);//enable interrupt for the pin
+  
 }
 
 ISR(INT2_vect, ISR_ALIASOF(INT5_vect)); //map ENC_A to unused INT5
@@ -466,6 +475,24 @@ ISR(INT5_vect) //ENC_TURN
 
 ISR(INT3_vect) //ENC_SW
 {
+}
+
+ISR(PCINT0_vect) //SW1 SW2
+{
+  static bool sw1_old = true;
+  static bool sw2_old = true;
+  
+  bool sw1_now = (PINB>>PB6) & 0x01;
+  if (sw1_old && !sw1_now) {
+    amo6_sw1_pushed = true;
+  }
+  sw1_old = sw1_now;
+  
+  bool sw2_now = (PINB>>PB5) & 0x01;
+  if (sw2_old && !sw2_now) {
+    amo6_sw2_pushed = true;
+  }
+  sw2_old = sw2_now;
 }
 
 //Screen
@@ -582,7 +609,7 @@ void amo2_screen_draw()
   CleO.Tag(amo2_screen_tec_ilimit_tag);
   CleO.RectangleColor(amo2_screen_select[amo2_screen_tec_ilimit_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(390, AMO6_SCREEN_ROW2_Y, 180, AMO6_SCREEN_ROW2_H);
-  sprintf(text_buf, "%1.1f A", amo2_vilm_amps);
+  sprintf(text_buf, "%1.2f A", amo2_vilm_amps);
   CleO.StringExt(FONT_SANS_5 , 390, AMO6_SCREEN_ROW2_Y, amo1_screen_text_color , MM , 0 , 0, text_buf);
   CleO.Line(0, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2, AMO6_SCREEN_W, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
@@ -740,22 +767,130 @@ void amo2_screen_processShortPress() {
 
 void amo2_screen_execute() 
 {
+  static int i_old = 0;
   int i;
   float tmp;
+  bool sw1_now = (PINB>>PB6) & 0x01;
+  bool sw2_now = (PINB>>PB5) & 0x01;
+  
+  for (i=0;i<AMO2_SCREEN_TAGS-1;i++) {
+    if (amo2_screen_select[i]==1) break;
+  }
+  
+  // sw1 pressed
+  if (amo6_sw1_pushed) {
+    if (!sw1_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
+      switch (i) {
+        case amo2_screen_temp_set_tag	:
+	  tmp = amo2_vt_degC - 1;
+	  if (tmp>35) tmp=35;
+	  if (tmp<-5) tmp=-5;
+	  amo2_vt_degC = tmp;
+	  break;
+        case amo2_screen_temp_min_tag	:
+	  break;
+        case amo2_screen_temp_max_tag	:
+	  break;
+        case amo2_screen_sensor_tag	:
+	  break;
+        case amo2_screen_sensor_temp_tag	:
+	  break;
+        case amo2_screen_tec_ilimit_tag	:
+	  tmp = amo2_vilm_amps - 1;
+	  if (tmp>5) tmp=5;
+	  if (tmp<0) tmp=0;
+	  amo2_vilm_amps = tmp;
+	  break;
+        case amo2_screen_pid_p_tag	:
+	  tmp = amo2_pid_p - 10;
+	  if (tmp>255) tmp=255;
+	  if (tmp<0) tmp=0;
+	  amo2_pid_p = tmp;
+	  break;
+        case amo2_screen_pid_i_tag	:
+	  tmp = amo2_pid_i - 10;
+	  if (tmp>255) tmp=255;
+	  if (tmp<0) tmp=0;
+	  amo2_pid_i = tmp;
+	  break;
+        case amo2_screen_pid_d_tag	:
+	  tmp = amo2_pid_d - 10;
+	  if (tmp>255) tmp=255;
+	  if (tmp<0) tmp=0;
+	  amo2_pid_d = tmp;
+	  break;
+        case amo2_screen_tec_heater_tag	:
+	  break;
+        case amo2_screen_tec_boost_tag	:
+	  break;
+      }
+    }
+    amo6_sw1_pushed = false;
+  }
+  
+  // sw2 pressed
+  if (amo6_sw2_pushed) {
+    if (!sw2_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
+      switch (i) {
+        case amo2_screen_temp_set_tag	:
+	  tmp = amo2_vt_degC + 1;
+	  if (tmp>35) tmp=35;
+	  if (tmp<-5) tmp=-5;
+	  amo2_vt_degC = tmp;
+	  break;
+        case amo2_screen_temp_min_tag	:
+	  break;
+        case amo2_screen_temp_max_tag	:
+	  break;
+        case amo2_screen_sensor_tag	:
+	  break;
+        case amo2_screen_sensor_temp_tag	:
+	  break;
+        case amo2_screen_tec_ilimit_tag	:
+	  tmp = amo2_vilm_amps + 1;
+	  if (tmp>5) tmp=5;
+	  if (tmp<0) tmp=0;
+	  amo2_vilm_amps = tmp;
+	  break;
+        case amo2_screen_pid_p_tag	:
+	  tmp = amo2_pid_p + 10;
+	  if (tmp>255) tmp=255;
+	  if (tmp<0) tmp=0;
+	  amo2_pid_p = tmp;
+	  break;
+        case amo2_screen_pid_i_tag	:
+	  tmp = amo2_pid_i + 10;
+	  if (tmp>255) tmp=255;
+	  if (tmp<0) tmp=0;
+	  amo2_pid_i = tmp;
+	  break;
+        case amo2_screen_pid_d_tag	:
+	  tmp = amo2_pid_d + 10;
+	  if (tmp>255) tmp=255;
+	  if (tmp<0) tmp=0;
+	  amo2_pid_d = tmp;
+	  break;
+        case amo2_screen_tec_heater_tag	:
+	  break;
+        case amo2_screen_tec_boost_tag	:
+	  break;
+      }
+    }
+    amo6_sw2_pushed = false;
+  }
   
   // encoder turn
   static int8_t amo6_encoder_val_prev;
-  if (amo6_encoder_val_prev == amo6_encoder_val) {
+  if ((amo6_encoder_val_prev == amo6_encoder_val) || (i != i_old)) {
+    amo6_encoder_val_prev = 0;
     amo6_encoder_val = 0;
   }
   else {
-    for (i=0;i<AMO2_SCREEN_TAGS-1;i++) {
-      if (amo2_screen_select[i]==1) break;
-    }
     int8_t val = amo6_encoder_val - amo6_encoder_val_prev;
     switch (i) {
       case amo2_screen_temp_set_tag	:
-	tmp = amo2_vt_degC + val*0.1;
+	val = val/4;
+	tmp = amo2_vt_degC + val*0.005;
 	if (tmp>35) tmp=35;
 	if (tmp<-5) tmp=-5;
 	amo2_vt_degC = tmp;
@@ -769,24 +904,28 @@ void amo2_screen_execute()
       case amo2_screen_sensor_temp_tag	:
 	break;
       case amo2_screen_tec_ilimit_tag	:
+	val = val/10;
 	tmp = amo2_vilm_amps + val*0.1;
 	if (tmp>5) tmp=5;
 	if (tmp<0) tmp=0;
 	amo2_vilm_amps = tmp;
 	break;
       case amo2_screen_pid_p_tag	:
+	val = val/10;
 	tmp = amo2_pid_p + val;
 	if (tmp>255) tmp=255;
 	if (tmp<0) tmp=0;
 	amo2_pid_p = tmp;
 	break;
       case amo2_screen_pid_i_tag	:
+	val = val/10;
 	tmp = amo2_pid_i + val;
 	if (tmp>255) tmp=255;
 	if (tmp<0) tmp=0;
 	amo2_pid_i = tmp;
 	break;
       case amo2_screen_pid_d_tag	:
+	val = val/10;
 	tmp = amo2_pid_d + val;
 	if (tmp>255) tmp=255;
 	if (tmp<0) tmp=0;
@@ -797,9 +936,13 @@ void amo2_screen_execute()
       case amo2_screen_tec_boost_tag	:
 	break;
     }
-    amo6_encoder_val_prev = 0;
-    amo6_encoder_val = 0;
+    if ((val>=1)||(val<=-1)) {
+      amo6_encoder_val_prev = 0;
+      amo6_encoder_val = 0;
+    }
   }
+  
+  i_old = i;
 }
 
 #endif // AMO2_H
