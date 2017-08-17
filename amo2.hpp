@@ -93,7 +93,7 @@ uint8_t   amo2_fault = amo2_fault_none;
 
 void amo2_init ();
 void amo2_process_faults ();
-void amo2_refresh ();
+void amo2_hardware_refresh ();
 
 // VT
 const float amo2_vt_uv_to_cnts = 0.0131072;
@@ -160,7 +160,7 @@ uint32_t amo2_FET_read_mw ();
 
 // Boost
 
-// Buttons
+// Buttons (AMO6)
 static int8_t amo6_encoder_val = 0;
 static bool amo6_sw1_pushed = false;
 static bool amo6_sw2_pushed = false;
@@ -168,7 +168,7 @@ static bool amo6_sw2_pushed = false;
 void amo6_buttons_init ();
 void amo6_buttons_refresh ();
 
-// Screen
+// Screen (AMO6)
 #define AMO6_CLEO_nPWR		PG0
 #define AMO6_CLEO_nPWR_DDR	DDRG
 #define AMO6_CLEO_nPWR_PORT	PORTG
@@ -192,23 +192,23 @@ uint32_t amo6_screen_text_color = MY_BLACK;
 uint32_t amo6_screen_line_color = MY_DARKBLUE;
 
 enum {
-  amo2_screen_null_tag	       , // 0
-  amo2_screen_temp_set_tag     , // 1
-  amo2_screen_temp_min_tag     , // 2
-  amo2_screen_temp_max_tag     , // 3
-  amo2_screen_sensor_tag       , // 4
-  amo2_screen_sensor_temp_tag  , // 5
-  amo2_screen_tec_ilimit_tag   , // 6
-  amo2_screen_pid_p_tag        , // 7
-  amo2_screen_pid_i_tag        , // 8
-  amo2_screen_pid_d_tag        , // 9
-  amo2_screen_tec_heater_tag   , // 10
-  amo2_screen_tec_boost_tag    , // 11
-  amo2_screen_enable_tag       , // 12
-  amo2_screen_last_tag         , // 13
+  amo6_screen_null_tag	       , // 0
+  amo6_screen_temp_set_tag     , // 1
+  amo6_screen_temp_min_tag     , // 2
+  amo6_screen_temp_max_tag     , // 3
+  amo6_screen_sensor_tag       , // 4
+  amo6_screen_sensor_temp_tag  , // 5
+  amo6_screen_tec_ilimit_tag   , // 6
+  amo6_screen_pid_p_tag        , // 7
+  amo6_screen_pid_i_tag        , // 8
+  amo6_screen_pid_d_tag        , // 9
+  amo6_screen_tec_heater_tag   , // 10
+  amo6_screen_tec_boost_tag    , // 11
+  amo6_screen_enable_tag       , // 12
+  amo6_screen_last_tag         , // 13
 };
-#define AMO2_SCREEN_TAGS	14
-bool amo2_screen_select[AMO2_SCREEN_TAGS];
+#define AMO6_SCREEN_TAGS	14
+bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
 int16_t amo6_screen_x, amo6_screen_y;
 int16_t amo6_screen_current_dur;
@@ -303,7 +303,7 @@ void amo2_process_faults()
   }
 }
 
-void amo2_refresh()
+void amo2_hardware_refresh()
 {
   if((amo2_pid_p!=amo2_pid_p_prev)||(amo2_pid_i!=amo2_pid_i_prev)||(amo2_pid_d!=amo2_pid_d_prev)) { //PID
     amo2_PID_set_cnts(amo2_pid_p, amo2_pid_i, amo2_pid_d);
@@ -473,7 +473,7 @@ uint32_t amo2_FET_read_mw()
   return amo2_fet_mw;
 }
 
-//Buttons
+//Buttons (AMO6)
 void amo6_buttons_init()
 {
   // ENC_A
@@ -553,16 +553,15 @@ void amo6_buttons_refresh()
   bool sw1_now = (PINB>>PB6) & 0x01;
   bool sw2_now = (PINB>>PB5) & 0x01;
   
-  for (tag=0;tag<AMO2_SCREEN_TAGS-1;tag++) { //find active screen tag
-    if (amo2_screen_select[tag]==1) break;
+  for (tag=0;tag<AMO6_SCREEN_TAGS-1;tag++) { //find active screen tag
+    if (amo6_screen_select[tag]==1) break;
   };
-  amo2_temp = tag;
   
   // sw1 pressed
   if (amo6_sw1_pushed) {
     if (!sw1_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
       switch (tag) {
-        case amo2_screen_temp_set_tag	:
+        case amo6_screen_temp_set_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = (int) amo2_vt_degC - 1;
@@ -570,15 +569,15 @@ void amo6_buttons_refresh()
 	  if (tmp<amo2_vt_degC_min) tmp=amo2_vt_degC_min;
 	  amo2_vt_degC = tmp;
 	  break;
-        case amo2_screen_temp_min_tag	:
+        case amo6_screen_temp_min_tag	:
 	  break;
-        case amo2_screen_temp_max_tag	:
+        case amo6_screen_temp_max_tag	:
 	  break;
-        case amo2_screen_sensor_tag	:
+        case amo6_screen_sensor_tag	:
 	  break;
-        case amo2_screen_sensor_temp_tag	:
+        case amo6_screen_sensor_temp_tag	:
 	  break;
-        case amo2_screen_tec_ilimit_tag	:
+        case amo6_screen_tec_ilimit_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_vilm_amps - 1;
@@ -586,7 +585,7 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_vilm_amps = tmp;
 	  break;
-        case amo2_screen_pid_p_tag	:
+        case amo6_screen_pid_p_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_pid_p - 10;
@@ -594,7 +593,7 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_pid_p = tmp;
 	  break;
-        case amo2_screen_pid_i_tag	:
+        case amo6_screen_pid_i_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_pid_i - 10;
@@ -602,7 +601,7 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_pid_i = tmp;
 	  break;
-        case amo2_screen_pid_d_tag	:
+        case amo6_screen_pid_d_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_pid_d - 10;
@@ -610,9 +609,9 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_pid_d = tmp;
 	  break;
-        case amo2_screen_tec_heater_tag	:
+        case amo6_screen_tec_heater_tag	:
 	  break;
-        case amo2_screen_tec_boost_tag	:
+        case amo6_screen_tec_boost_tag	:
 	  break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -624,7 +623,7 @@ void amo6_buttons_refresh()
   if (amo6_sw2_pushed) {
     if (!sw2_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
       switch (tag) {
-        case amo2_screen_temp_set_tag	:
+        case amo6_screen_temp_set_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = (int) amo2_vt_degC + 1;
@@ -632,15 +631,15 @@ void amo6_buttons_refresh()
 	  if (tmp<amo2_vt_degC_min) tmp=amo2_vt_degC_min;
 	  amo2_vt_degC = tmp;
 	  break;
-        case amo2_screen_temp_min_tag	:
+        case amo6_screen_temp_min_tag	:
 	  break;
-        case amo2_screen_temp_max_tag	:
+        case amo6_screen_temp_max_tag	:
 	  break;
-        case amo2_screen_sensor_tag	:
+        case amo6_screen_sensor_tag	:
 	  break;
-        case amo2_screen_sensor_temp_tag	:
+        case amo6_screen_sensor_temp_tag	:
 	  break;
-        case amo2_screen_tec_ilimit_tag	:
+        case amo6_screen_tec_ilimit_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_vilm_amps + 1;
@@ -648,7 +647,7 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_vilm_amps = tmp;
 	  break;
-        case amo2_screen_pid_p_tag	:
+        case amo6_screen_pid_p_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_pid_p + 10;
@@ -656,7 +655,7 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_pid_p = tmp;
 	  break;
-        case amo2_screen_pid_i_tag	:
+        case amo6_screen_pid_i_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_pid_i + 10;
@@ -664,7 +663,7 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_pid_i = tmp;
 	  break;
-        case amo2_screen_pid_d_tag	:
+        case amo6_screen_pid_d_tag	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo2_pid_d + 10;
@@ -672,9 +671,9 @@ void amo6_buttons_refresh()
 	  if (tmp<0) tmp=0;
 	  amo2_pid_d = tmp;
 	  break;
-        case amo2_screen_tec_heater_tag	:
+        case amo6_screen_tec_heater_tag	:
 	  break;
-        case amo2_screen_tec_boost_tag	:
+        case amo6_screen_tec_boost_tag	:
 	  break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -693,7 +692,7 @@ void amo6_buttons_refresh()
     int8_t val = amo6_encoder_val - amo6_encoder_val_prev;
     //int8_t val = amo6_encoder_val;
     switch (tag) {
-      case amo2_screen_temp_set_tag	:
+      case amo6_screen_temp_set_tag	:
 	val = val/4;
 	if (val!=0) {
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -704,15 +703,15 @@ void amo6_buttons_refresh()
 	if (tmp<amo2_vt_degC_min) tmp=amo2_vt_degC_min;
 	amo2_vt_degC = tmp;
 	break;
-      case amo2_screen_temp_min_tag	:
+      case amo6_screen_temp_min_tag	:
 	break;
-      case amo2_screen_temp_max_tag	:
+      case amo6_screen_temp_max_tag	:
 	break;
-      case amo2_screen_sensor_tag	:
+      case amo6_screen_sensor_tag	:
 	break;
-      case amo2_screen_sensor_temp_tag	:
+      case amo6_screen_sensor_temp_tag	:
 	break;
-      case amo2_screen_tec_ilimit_tag	:
+      case amo6_screen_tec_ilimit_tag	:
 	val = val/10;
 	if (val!=0) {
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -723,7 +722,7 @@ void amo6_buttons_refresh()
 	if (tmp<0) tmp=0;
 	amo2_vilm_amps = tmp;
 	break;
-      case amo2_screen_pid_p_tag	:
+      case amo6_screen_pid_p_tag	:
 	_delay_ms(1);
 	val = val/10;
 	if (val!=0) {
@@ -735,7 +734,7 @@ void amo6_buttons_refresh()
 	if (tmp<0) tmp=0;
 	amo2_pid_p = tmp;
 	break;
-      case amo2_screen_pid_i_tag	:
+      case amo6_screen_pid_i_tag	:
 	val = val/10;
 	if (val!=0) {
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -746,7 +745,7 @@ void amo6_buttons_refresh()
 	if (tmp<0) tmp=0;
 	amo2_pid_i = tmp;
 	break;
-      case amo2_screen_pid_d_tag	:
+      case amo6_screen_pid_d_tag	:
 	val = val/10;
 	if (val!=0) {
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -757,9 +756,9 @@ void amo6_buttons_refresh()
 	if (tmp<0) tmp=0;
 	amo2_pid_d = tmp;
 	break;
-      case amo2_screen_tec_heater_tag	:
+      case amo6_screen_tec_heater_tag	:
 	break;
-      case amo2_screen_tec_boost_tag	:
+      case amo6_screen_tec_boost_tag	:
 	break;
     }
     if ((val<=-1)||(val>=1)) {
@@ -774,7 +773,7 @@ void amo6_buttons_refresh()
   tag_old = tag;
 }
 
-//Screen
+//Screen (AMO6)
 void amo6_screen_debug()
 {
   printf("CleO Version = %d\n", CleO.Version());
@@ -843,16 +842,16 @@ void amo6_screen_draw()
   CleO.LineColor(amo6_screen_line_color);
     
   // Temperature Set
-  CleO.Tag(amo2_screen_temp_set_tag);
-  CleO.RectangleColor(amo2_screen_select[amo2_screen_temp_set_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_temp_set_tag);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_temp_set_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(150, AMO6_SCREEN_ROW1_Y, 300, AMO6_SCREEN_ROW1_H);
   sprintf(text_buf, "%02.3f C", amo2_vt_degC);
   CleO.StringExt(FONT_SANS_6, 150, AMO6_SCREEN_ROW1_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
   CleO.Line(300, 0, 300, AMO6_SCREEN_ROW1_H);
     
   // Temperature Min
-  CleO.Tag(amo2_screen_temp_min_tag);
-  //CleO.RectangleColor(amo2_screen_select[amo2_screen_temp_min_tag] ? MY_GREEN : MY_YELLOW);
+  CleO.Tag(amo6_screen_temp_min_tag);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_temp_min_tag] ? MY_GREEN : MY_YELLOW);
   CleO.RectangleColor(MY_WHITE);
   CleO.RectangleXY(345, AMO6_SCREEN_ROW1_Y, 90, AMO6_SCREEN_ROW1_H);
   CleO.StringExt(FONT_SANS_4 , 345, AMO6_SCREEN_ROW1_Y-20, amo6_screen_text_color , MM , 0 , 0, "min");
@@ -861,8 +860,8 @@ void amo6_screen_draw()
   CleO.Line(390, 0, 390, AMO6_SCREEN_ROW1_H);
     
   // Temperature Max
-  CleO.Tag(amo2_screen_temp_max_tag);
-  //CleO.RectangleColor(amo2_screen_select[amo2_screen_temp_max_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_temp_max_tag);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_temp_max_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleColor(MY_WHITE);
   CleO.RectangleXY(435, AMO6_SCREEN_ROW1_Y, 90, AMO6_SCREEN_ROW1_H);
   CleO.StringExt(FONT_SANS_4 , 435, AMO6_SCREEN_ROW1_Y-20, amo6_screen_text_color , MM , 0 , 0, "max");
@@ -871,17 +870,17 @@ void amo6_screen_draw()
   CleO.Line(0, AMO6_SCREEN_ROW1_Y+AMO6_SCREEN_ROW1_H/2, AMO6_SCREEN_W, AMO6_SCREEN_ROW1_Y+AMO6_SCREEN_ROW1_H/2);
     
   // Sensor Type
-  CleO.Tag(amo2_screen_sensor_tag);
-  //CleO.RectangleColor(amo2_screen_select[amo2_screen_sensor_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_sensor_tag);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_sensor_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleColor(MY_WHITE);
   CleO.RectangleXY(50, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
-  //sprintf(text_buf, "%d", amo2_screen_sensor_sel);
+  //sprintf(text_buf, "%d", amo6_screen_sensor_sel);
   CleO.StringExt(FONT_SANS_2 , 50, 125, amo6_screen_text_color , MM , 0 , 0, "NTC10K");
   CleO.Line(100, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 100, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
     
   // Sensor Temperature
-  CleO.Tag(amo2_screen_sensor_temp_tag);
-  //CleO.RectangleColor(amo2_screen_select[amo2_screen_sensor_temp_tag] ? MY_GREEN : MY_YELLOW);
+  CleO.Tag(amo6_screen_sensor_temp_tag);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_sensor_temp_tag] ? MY_GREEN : MY_YELLOW);
   CleO.RectangleColor(MY_YELLOW);
   CleO.RectangleXY(200, AMO6_SCREEN_ROW2_Y, 200, AMO6_SCREEN_ROW2_H);
   //sprintf(text_buf, "%lu", amo2_vpp_uv);
@@ -891,16 +890,16 @@ void amo6_screen_draw()
   CleO.Line(300, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 300, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // TEC iLimit
-  CleO.Tag(amo2_screen_tec_ilimit_tag);
-  CleO.RectangleColor(amo2_screen_select[amo2_screen_tec_ilimit_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_tec_ilimit_tag);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_ilimit_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(390, AMO6_SCREEN_ROW2_Y, 180, AMO6_SCREEN_ROW2_H);
   sprintf(text_buf, "%1.2f A", amo2_vilm_amps);
   CleO.StringExt(FONT_SANS_5 , 390, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   CleO.Line(0, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2, AMO6_SCREEN_W, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // PID P
-  CleO.Tag(amo2_screen_pid_p_tag);
-  CleO.RectangleColor(amo2_screen_select[amo2_screen_pid_p_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_pid_p_tag);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_p_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(50, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
   CleO.StringExt(FONT_SANS_3 , 5, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2+5, amo6_screen_text_color, TL, 0, 0, "P");
   sprintf(text_buf, "%d", amo2_pid_p);
@@ -908,8 +907,8 @@ void amo6_screen_draw()
   CleO.Line(100, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 100, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // PID I
-  CleO.Tag(amo2_screen_pid_i_tag);
-  CleO.RectangleColor(amo2_screen_select[amo2_screen_pid_i_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_pid_i_tag);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_i_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(150, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
   CleO.StringExt(FONT_SANS_3 , 105, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2+6, amo6_screen_text_color, TL, 0, 0, "I");
   sprintf(text_buf, "%d", amo2_pid_i);
@@ -917,8 +916,8 @@ void amo6_screen_draw()
   CleO.Line(200, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 200, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // PID D
-  CleO.Tag(amo2_screen_pid_d_tag);
-  CleO.RectangleColor(amo2_screen_select[amo2_screen_pid_d_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_pid_d_tag);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_d_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleXY(250, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
   CleO.StringExt(FONT_SANS_3 , 205, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2+6, amo6_screen_text_color, TL, 0, 0, "D");
   sprintf(text_buf, "%d", amo2_pid_d);
@@ -926,31 +925,31 @@ void amo6_screen_draw()
   CleO.Line(300, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 300, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // Heater or Debug
-  CleO.Tag(amo2_screen_tec_heater_tag);
-  CleO.RectangleColor(amo2_screen_select[amo2_screen_tec_heater_tag] ? MY_GREEN : MY_YELLOW);
+  CleO.Tag(amo6_screen_tec_heater_tag);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_heater_tag] ? MY_GREEN : MY_YELLOW);
   //CleO.RectangleColor(MY_WHITE);
   CleO.RectangleXY(345, AMO6_SCREEN_ROW3_Y, 90, AMO6_SCREEN_ROW3_H);
-  //sprintf(text_buf, "%d", amo2_screen_select[amo2_screen_tec_heater_tag]);
+  //sprintf(text_buf, "%d", amo6_screen_select[amo6_screen_tec_heater_tag]);
   sprintf(text_buf, "%d", amo6_screen_current_tag);
   //sprintf(text_buf, "%lu", amo2_temp);
   CleO.StringExt(FONT_SANS_3 , 345, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   CleO.Line(390, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 390, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // Boost
-  CleO.Tag(amo2_screen_tec_boost_tag);
-  //CleO.RectangleColor(amo2_screen_select[amo2_screen_tec_boost_tag] ? MY_GREEN : MY_WHITE);
+  CleO.Tag(amo6_screen_tec_boost_tag);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_boost_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleColor(MY_WHITE);
   CleO.RectangleXY(435, AMO6_SCREEN_ROW3_Y, 90, AMO6_SCREEN_ROW3_H);
-  //sprintf(text_buf, "%d", amo2_screen_tec_boost_sel);
+  //sprintf(text_buf, "%d", amo6_screen_tec_boost_sel);
   //CleO.StringExt(FONT_SANS_3 , 435, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color , MM , 0 , 0, "Boost");
   CleO.Line(0, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2, AMO6_SCREEN_W, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // Enable
-  CleO.Tag(amo2_screen_enable_tag);
-  //CleO.RectangleColor(amo2_screen_select[amo2_screen_enable_tag] ? MY_GREEN : MY_RED);
+  CleO.Tag(amo6_screen_enable_tag);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_enable_tag] ? MY_GREEN : MY_RED);
   CleO.RectangleColor(amo2_tec_state ? MY_GREEN : MY_RED);
   CleO.RectangleXY(240, AMO6_SCREEN_ROW4_Y, 480, AMO6_SCREEN_ROW4_H);
-  //sprintf(text_buf, "%d", amo2_screen_enable_sel);
+  //sprintf(text_buf, "%d", amo6_screen_enable_sel);
   if (amo2_tec_state) {
     sprintf(text_buf, "iTEC (%lu.%02lu A, %lu.%02lu W, %d)", amo2_fet_ma/1000, amo2_fet_ma/10, amo2_fet_mw/1000, amo2_fet_mw/10, amo2_fet_bridge);
   }
@@ -996,62 +995,62 @@ void amo6_screen_processShortPress() {
   bool sel;
   
   switch (amo6_screen_current_tag) {
-    case amo2_screen_temp_set_tag	:
-      sel = !amo2_screen_select[amo2_screen_temp_set_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_temp_set_tag] = sel;
+    case amo6_screen_temp_set_tag	:
+      sel = !amo6_screen_select[amo6_screen_temp_set_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_temp_set_tag] = sel;
       break;
-    case amo2_screen_temp_min_tag	:
-      sel = !amo2_screen_select[amo2_screen_temp_min_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_temp_min_tag] = sel;
+    case amo6_screen_temp_min_tag	:
+      sel = !amo6_screen_select[amo6_screen_temp_min_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_temp_min_tag] = sel;
       break;
-    case amo2_screen_temp_max_tag	:
-      sel = !amo2_screen_select[amo2_screen_temp_max_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_temp_max_tag] = sel;
+    case amo6_screen_temp_max_tag	:
+      sel = !amo6_screen_select[amo6_screen_temp_max_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_temp_max_tag] = sel;
       break;
-    case amo2_screen_sensor_tag	:
-      sel = !amo2_screen_select[amo2_screen_sensor_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_sensor_tag] = sel;
+    case amo6_screen_sensor_tag	:
+      sel = !amo6_screen_select[amo6_screen_sensor_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_sensor_tag] = sel;
       break;
-    case amo2_screen_sensor_temp_tag	:
-      sel = !amo2_screen_select[amo2_screen_sensor_temp_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_sensor_temp_tag] = sel;
+    case amo6_screen_sensor_temp_tag	:
+      sel = !amo6_screen_select[amo6_screen_sensor_temp_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_sensor_temp_tag] = sel;
       break;
-    case amo2_screen_tec_ilimit_tag	:
-      sel = !amo2_screen_select[amo2_screen_tec_ilimit_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_tec_ilimit_tag] = sel;
+    case amo6_screen_tec_ilimit_tag	:
+      sel = !amo6_screen_select[amo6_screen_tec_ilimit_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_tec_ilimit_tag] = sel;
       break;
-    case amo2_screen_pid_p_tag	:
-      sel = !amo2_screen_select[amo2_screen_pid_p_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_pid_p_tag] = sel;
+    case amo6_screen_pid_p_tag	:
+      sel = !amo6_screen_select[amo6_screen_pid_p_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_pid_p_tag] = sel;
       break;
-    case amo2_screen_pid_i_tag	:
-      sel = !amo2_screen_select[amo2_screen_pid_i_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_pid_i_tag] = sel;
+    case amo6_screen_pid_i_tag	:
+      sel = !amo6_screen_select[amo6_screen_pid_i_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_pid_i_tag] = sel;
       break;
-    case amo2_screen_pid_d_tag	:
-      sel = !amo2_screen_select[amo2_screen_pid_d_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_pid_d_tag] = sel;
+    case amo6_screen_pid_d_tag	:
+      sel = !amo6_screen_select[amo6_screen_pid_d_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_pid_d_tag] = sel;
       break;
-    case amo2_screen_tec_heater_tag	:
-      sel = !amo2_screen_select[amo2_screen_tec_heater_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_tec_heater_tag] = sel;
+    case amo6_screen_tec_heater_tag	:
+      sel = !amo6_screen_select[amo6_screen_tec_heater_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_tec_heater_tag] = sel;
       break;
-    case amo2_screen_tec_boost_tag	:
-      sel = !amo2_screen_select[amo2_screen_tec_boost_tag];
-      for(i=0;i<AMO2_SCREEN_TAGS-1;i++) amo2_screen_select[i]=0;
-      amo2_screen_select[amo2_screen_tec_boost_tag] = sel;
+    case amo6_screen_tec_boost_tag	:
+      sel = !amo6_screen_select[amo6_screen_tec_boost_tag];
+      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[amo6_screen_tec_boost_tag] = sel;
       break;
-    case amo2_screen_enable_tag	:
+    case amo6_screen_enable_tag	:
       if ( amo2_tec_state_prev) amo2_tec_state = false;
       if ((!amo2_tec_state_prev) && (amo2_fault==amo2_fault_none)) amo2_tec_state = true; //only when prev state is off and no faults
       break;

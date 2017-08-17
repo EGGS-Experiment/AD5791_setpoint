@@ -115,7 +115,7 @@ int main(void) {
     }
     
     if (counter%250==0) {
-      amo2_refresh();
+      amo2_hardware_refresh();
       no_op=0;
     }
     
