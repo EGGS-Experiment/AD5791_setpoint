@@ -109,8 +109,8 @@ int main(void) {
     }
     
     if (counter%100==0) {
-      amo6_screen_refresh();
       amo6_buttons_refresh();
+      amo6_screen_refresh();
       no_op=0;
     }
     

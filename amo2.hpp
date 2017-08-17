@@ -84,12 +84,15 @@ bool amo2_tec_state_prev = false;
 enum{
   amo2_fault_none		, //0
   amo2_fault_sensor		, //1
+  amo2_fault_tec		, //2
 };
 const char* amo2_fault_string[] = {
   "OFF"			,
   "Sesnor Out of Range"
+  "TEC Current Out of Range"
 };
-uint8_t   amo2_fault = amo2_fault_none;
+uint8_t amo2_fault = amo2_fault_none;
+uint8_t amo2_fault_prev = amo2_fault_none;
 
 void amo2_init ();
 void amo2_fault_check ();
@@ -291,8 +294,17 @@ void amo2_init()
 
 void amo2_fault_check()
 {
-  if ((amo2_vpp_degC>(amo2_vt_degC_max+1)) || (amo2_vpp_degC<(amo2_vt_degC_min-1))) {
+  if ((amo2_vpp_degC>(amo2_vt_degC_max+1)) || (amo2_vpp_degC<(-300-1))) {
     amo2_fault = amo2_fault_sensor;
+    amo2_fault_prev = amo2_fault_sensor;
+    if ( amo2_tec_state_prev) {
+      amo2_VILM_set_ma(0);
+      amo2_tec_state = false;
+    }
+  }
+  else if(amo2_fet_ma>((amo2_vilm_amps+1)*1000)) {
+    amo2_fault = amo2_fault_tec;
+    amo2_fault_prev = amo2_fault_tec;
     if ( amo2_tec_state_prev) {
       amo2_VILM_set_ma(0);
       amo2_tec_state = false;
@@ -954,7 +966,7 @@ void amo6_screen_draw()
     sprintf(text_buf, "iTEC (%lu.%02lu A, %lu.%02lu W, %d)", amo2_fet_ma/1000, amo2_fet_ma/10, amo2_fet_mw/1000, amo2_fet_mw/10, amo2_fet_bridge);
   }
   else {
-    sprintf(text_buf, "%s", amo2_fault_string[amo2_fault]);
+    sprintf(text_buf, "%s", amo2_fault_string[amo2_fault_prev]);
   }
   CleO.StringExt(FONT_SANS_4 , 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   
@@ -1052,7 +1064,10 @@ void amo6_screen_processShortPress() {
       break;
     case amo6_screen_enable_tag	:
       if ( amo2_tec_state_prev) amo2_tec_state = false;
-      if ((!amo2_tec_state_prev) && (amo2_fault==amo2_fault_none)) amo2_tec_state = true; //only when prev state is off and no faults
+      if ((!amo2_tec_state_prev) && (amo2_fault==amo2_fault_none)) { //only when prev state is off and no faults
+	amo2_tec_state = true; 
+	amo2_fault_prev = amo2_fault_none;
+      }
       break;
   }
 }
