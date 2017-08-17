@@ -92,7 +92,7 @@ const char* amo2_fault_string[] = {
 uint8_t   amo2_fault = amo2_fault_none;
 
 void amo2_init ();
-void amo2_process_faults ();
+void amo2_fault_check ();
 void amo2_hardware_refresh ();
 
 // VT
@@ -289,7 +289,7 @@ void amo2_init()
 //  _delay_ms(5000);
 }
 
-void amo2_process_faults()
+void amo2_fault_check()
 {
   if ((amo2_vpp_degC>(amo2_vt_degC_max+1)) || (amo2_vpp_degC<(amo2_vt_degC_min-1))) {
     amo2_fault = amo2_fault_sensor;

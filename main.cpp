@@ -104,7 +104,7 @@ int main(void) {
       //amo2_VPP_read_uv();
       amo2_VPP_read_degC();
       amo2_FET_read_mw();
-      amo2_process_faults();
+      amo2_fault_check();
       no_op=0;
     }
     
