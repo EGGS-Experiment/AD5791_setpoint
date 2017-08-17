@@ -104,19 +104,18 @@ int main(void) {
       //amo2_VPP_read_uv();
       amo2_VPP_read_degC();
       amo2_FET_read_mw();
-//      amo1_adjVDD1();
-//      amo1_processFault();
+      amo2_process_faults();
       no_op=0;
     }
     
     if (counter%100==0) {
-      amo2_screen_refresh();
-      amo2_screen_execute();
+      amo6_screen_refresh();
+      amo6_buttons_refresh();
       no_op=0;
     }
     
     if (counter%250==0) {
-      amo2_execute();
+      amo2_refresh();
       no_op=0;
     }
     
