@@ -462,17 +462,23 @@ void amo2_FET_init()
 
 uint32_t amo2_FET_read_mw()
 {
-  uint8_t i = 0;
   static uint8_t size = 5;
   static uint8_t idx = 0;
   static uint32_t amo2_fet_ma_buf[5];
   static uint32_t amo2_fet_mv_buf[5];
   
   uint32_t val = amo2_FET_adc.readCounts();
+  //amo2_fet_ma = (val & 0xFFF) * amo2_fet_cnts_to_ma;
+  //amo2_fet_mv = ((val>>16) & 0xFFF) * amo2_fet_cnts_to_mv;
   
   if (idx>=size) idx=0;
   amo2_fet_ma_buf[idx] = (val & 0xFFF) * amo2_fet_cnts_to_ma;
   amo2_fet_mv_buf[idx] = ((val>>16) & 0xFFF) * amo2_fet_cnts_to_mv;
+  idx++;
+  
+  amo2_fet_ma = 0;
+  amo2_fet_mv = 0;
+  uint8_t i = 0;
   for (i=0;i<size;i++) {
     amo2_fet_ma += amo2_fet_ma_buf[i];
     amo2_fet_mv += amo2_fet_mv_buf[i];
@@ -938,13 +944,13 @@ void amo6_screen_draw()
   
   // Heater or Debug
   CleO.Tag(amo6_screen_tec_heater_tag);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_heater_tag] ? MY_GREEN : MY_YELLOW);
-  //CleO.RectangleColor(MY_WHITE);
+  //CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_heater_tag] ? MY_GREEN : MY_YELLOW);
+  CleO.RectangleColor(MY_WHITE);
   CleO.RectangleXY(345, AMO6_SCREEN_ROW3_Y, 90, AMO6_SCREEN_ROW3_H);
   //sprintf(text_buf, "%d", amo6_screen_select[amo6_screen_tec_heater_tag]);
-  sprintf(text_buf, "%d", amo6_screen_current_tag);
+  //sprintf(text_buf, "%d", amo6_screen_current_tag);
   //sprintf(text_buf, "%lu", amo2_temp);
-  CleO.StringExt(FONT_SANS_3 , 345, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
+  //CleO.StringExt(FONT_SANS_3 , 345, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   CleO.Line(390, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 390, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // Boost
@@ -963,7 +969,8 @@ void amo6_screen_draw()
   CleO.RectangleXY(240, AMO6_SCREEN_ROW4_Y, 480, AMO6_SCREEN_ROW4_H);
   //sprintf(text_buf, "%d", amo6_screen_enable_sel);
   if (amo2_tec_state) {
-    sprintf(text_buf, "iTEC (%lu.%02lu A, %lu.%02lu W, %d)", amo2_fet_ma/1000, amo2_fet_ma/10, amo2_fet_mw/1000, amo2_fet_mw/10, amo2_fet_bridge);
+    //sprintf(text_buf, "iTEC (%lu.%02lu A, %lu.%02lu V, %d)", amo2_fet_ma/1000, (amo2_fet_ma%1000)/100, amo2_fet_mv/1000, (amo2_fet_mv%1000)/100, amo2_fet_bridge);
+    sprintf(text_buf, "iTEC (%lu mA, %lu mV, %d)", amo2_fet_ma, amo2_fet_mv, amo2_fet_bridge); 
   }
   else {
     sprintf(text_buf, "%s", amo2_fault_string[amo2_fault_prev]);
