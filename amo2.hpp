@@ -87,8 +87,8 @@ enum{
   amo2_fault_tec		, //2
 };
 const char* amo2_fault_string[] = {
-  "OFF"			,
-  "Sesnor Out of Range"
+  "OFF"				,
+  "Sesnor Out of Range"		,
   "TEC Current Out of Range"
 };
 uint8_t amo2_fault = amo2_fault_none;
@@ -294,7 +294,7 @@ void amo2_init()
 
 void amo2_fault_check()
 {
-  if ((amo2_vpp_degC>(amo2_vt_degC_max+1)) || (amo2_vpp_degC<(-300-1))) {
+  if ((amo2_vpp_degC>(amo2_vt_degC_max+1)) || (amo2_vpp_degC<(amo2_vt_degC_min-1))) {
     amo2_fault = amo2_fault_sensor;
     amo2_fault_prev = amo2_fault_sensor;
     if ( amo2_tec_state_prev) {
@@ -312,6 +312,7 @@ void amo2_fault_check()
   }
   else {
     amo2_fault = amo2_fault_none;
+    if (amo2_fault_prev != amo2_fault_tec) amo2_fault_prev = amo2_fault_none;
   }
 }
 
