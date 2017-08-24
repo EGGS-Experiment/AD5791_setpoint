@@ -892,21 +892,21 @@ void amo6_screen_draw()
   CleO.Tag(amo6_screen_sensor_tag);
   //CleO.RectangleColor(amo6_screen_select[amo6_screen_sensor_tag] ? MY_GREEN : MY_WHITE);
   CleO.RectangleColor(MY_WHITE);
-  CleO.RectangleXY(50, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
+  CleO.RectangleXY(50, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
   //sprintf(text_buf, "%d", amo6_screen_sensor_sel);
-  CleO.StringExt(FONT_SANS_2 , 50, 125, amo6_screen_text_color , MM , 0 , 0, "NTC10K");
-  CleO.Line(100, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 100, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
+  CleO.StringExt(FONT_SANS_2 , 50, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color , MM , 0 , 0, "NTC10K");
+  CleO.Line(100, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 100, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
     
   // Sensor Temperature
   CleO.Tag(amo6_screen_sensor_temp_tag);
   //CleO.RectangleColor(amo6_screen_select[amo6_screen_sensor_temp_tag] ? MY_GREEN : MY_YELLOW);
   CleO.RectangleColor(MY_YELLOW);
-  CleO.RectangleXY(200, AMO6_SCREEN_ROW2_Y, 200, AMO6_SCREEN_ROW2_H);
+  CleO.RectangleXY(200, AMO6_SCREEN_ROW3_Y, 200, AMO6_SCREEN_ROW3_H);
   //sprintf(text_buf, "%lu", amo2_vpp_uv);
   sprintf(text_buf, "%03.3f C", amo2_vpp_degC);
-  CleO.StringExt(FONT_SANS_4 , 300-20, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.CircleExt(300-43, AMO6_SCREEN_ROW2_Y-15, 3, 4, amo6_screen_text_color, MM, 0, 0); //BUG: froze the program
-  CleO.Line(300, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 300, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
+  CleO.StringExt(FONT_SANS_4 , 300-20, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.CircleExt(300-43, AMO6_SCREEN_ROW3_Y-15, 3, 4, amo6_screen_text_color, MM, 0, 0); //BUG: froze the program
+  CleO.Line(300, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 300, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
   
   // TEC iLimit
   CleO.Tag(amo6_screen_tec_ilimit_tag);
@@ -919,29 +919,29 @@ void amo6_screen_draw()
   // PID P
   CleO.Tag(amo6_screen_pid_p_tag);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_p_tag] ? MY_GREEN : MY_WHITE);
-  CleO.RectangleXY(50, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
-  CleO.StringExt(FONT_SANS_3 , 5, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2+5, amo6_screen_text_color, TL, 0, 0, "P");
+  CleO.RectangleXY(50, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
+  CleO.StringExt(FONT_SANS_3 , 5, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2+5, amo6_screen_text_color, TL, 0, 0, "P");
   sprintf(text_buf, "%d", amo2_pid_p);
-  CleO.StringExt(FONT_SANS_5 , 50+4, AMO6_SCREEN_ROW3_Y+6, amo6_screen_text_color , MM , 0 , 0, text_buf);
-  CleO.Line(100, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 100, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
+  CleO.StringExt(FONT_SANS_5 , 50+4, AMO6_SCREEN_ROW2_Y+6, amo6_screen_text_color , MM , 0 , 0, text_buf);
+  CleO.Line(100, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 100, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // PID I
   CleO.Tag(amo6_screen_pid_i_tag);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_i_tag] ? MY_GREEN : MY_WHITE);
-  CleO.RectangleXY(150, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
-  CleO.StringExt(FONT_SANS_3 , 105, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2+6, amo6_screen_text_color, TL, 0, 0, "I");
+  CleO.RectangleXY(150, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
+  CleO.StringExt(FONT_SANS_3 , 105, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2+6, amo6_screen_text_color, TL, 0, 0, "I");
   sprintf(text_buf, "%d", amo2_pid_i);
-  CleO.StringExt(FONT_SANS_5 , 150+4, AMO6_SCREEN_ROW3_Y+5, amo6_screen_text_color , MM , 0 , 0, text_buf);
-  CleO.Line(200, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 200, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
+  CleO.StringExt(FONT_SANS_5 , 150+4, AMO6_SCREEN_ROW2_Y+5, amo6_screen_text_color , MM , 0 , 0, text_buf);
+  CleO.Line(200, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 200, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // PID D
   CleO.Tag(amo6_screen_pid_d_tag);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_d_tag] ? MY_GREEN : MY_WHITE);
-  CleO.RectangleXY(250, AMO6_SCREEN_ROW3_Y, 100, AMO6_SCREEN_ROW3_H);
-  CleO.StringExt(FONT_SANS_3 , 205, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2+6, amo6_screen_text_color, TL, 0, 0, "D");
+  CleO.RectangleXY(250, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
+  CleO.StringExt(FONT_SANS_3 , 205, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2+6, amo6_screen_text_color, TL, 0, 0, "D");
   sprintf(text_buf, "%d", amo2_pid_d);
-  CleO.StringExt(FONT_SANS_5 , 250+4, AMO6_SCREEN_ROW3_Y+5, amo6_screen_text_color, MM, 0 , 0, text_buf);
-  CleO.Line(300, AMO6_SCREEN_ROW3_Y-AMO6_SCREEN_ROW3_H/2, 300, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_ROW3_H/2);
+  CleO.StringExt(FONT_SANS_5 , 250+4, AMO6_SCREEN_ROW2_Y+5, amo6_screen_text_color, MM, 0 , 0, text_buf);
+  CleO.Line(300, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2, 300, AMO6_SCREEN_ROW2_Y+AMO6_SCREEN_ROW2_H/2);
   
   // Heater or Debug
   CleO.Tag(amo6_screen_tec_heater_tag);
