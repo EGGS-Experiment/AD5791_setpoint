@@ -149,6 +149,7 @@ double amo2_VPP_read_degC ();
 // FET
 const float amo2_fet_cnts_to_mv = 3.476743;
 const float amo2_fet_cnts_to_ma = 40.1657;
+const uint32_t amo2_fet_vtec_mv = 5010;
 uint32_t amo2_fet_mv;
 uint32_t amo2_fet_ma;
 uint32_t amo2_fet_mw;
@@ -970,7 +971,9 @@ void amo6_screen_draw()
   CleO.RectangleXY(240, AMO6_SCREEN_ROW4_Y, 480, AMO6_SCREEN_ROW4_H);
   //sprintf(text_buf, "%d", amo6_screen_enable_sel);
   if (amo2_tec_state) {
-    sprintf(text_buf, "TEC: %02.2f A, %02.2f V, %d", (double) amo2_fet_ma/1000, (double) amo2_fet_mv/1000, amo2_fet_bridge); 
+    if(amo2_fet_bridge) sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/-1000);
+    else sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000);
+    //sprintf(text_buf, "TEC: %02.2f A, %02.2f V, %d", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000, amo2_fet_bridge); 
     //sprintf(text_buf, "TEC: %lu mA, %lu mV, %d", amo2_fet_ma, amo2_fet_mv, amo2_fet_bridge); 
   }
   else {
