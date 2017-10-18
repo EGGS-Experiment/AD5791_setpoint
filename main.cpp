@@ -109,13 +109,13 @@ int main(void) {
     }
     
     if (counter%100==0) {
-      amo6_buttons_refresh();
-      amo6_screen_refresh();
+      amo6_buttons_update();
+      amo6_screen_update();
       no_op=0;
     }
     
     if (counter%250==0) {
-      amo2_hardware_refresh();
+      amo2_hardware_update();
       no_op=0;
     }
     

@@ -85,18 +85,24 @@ enum{
   amo2_fault_none		, //0
   amo2_fault_sensor		, //1
   amo2_fault_tec		, //2
+  amo2_fault_tec_pol		, //3
+  amo2_fault_tec_open		, //4
 };
 const char* amo2_fault_string[] = {
   "OFF"				,
   "Sesnor Out of Range"		,
-  "TEC Current Out of Range"
+  "TEC Current Out of Range"    ,
+  "TEC Polarity Reversed"	,
+  "TEC Not Connected"		,
 };
 uint8_t amo2_fault = amo2_fault_none;
 uint8_t amo2_fault_prev = amo2_fault_none;
+const float amo2_fault_check_degC_delta = 0.2;
+bool amo2_fault_check_tec_pol = false;
 
 void amo2_init ();
 void amo2_fault_check ();
-void amo2_hardware_refresh ();
+void amo2_hardware_update ();
 
 // VT
 const float amo2_vt_uv_to_cnts = 0.0131072;
@@ -140,6 +146,7 @@ const float amo2_vpp_cnts_to_uv = 76.29395;
 uint16_t amo2_vpp_cnts_max = 65535;
 uint32_t amo2_vpp_uv = 0;
 double amo2_vpp_degC = 0;
+double amo2_vpp_degC_prev = 0;
 MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
 
 void amo2_VPP_init();
@@ -149,7 +156,7 @@ double amo2_VPP_read_degC ();
 // FET
 const float amo2_fet_cnts_to_mv = 3.476743;
 const float amo2_fet_cnts_to_ma = 40.1657;
-const uint32_t amo2_fet_vtec_mv = 5010;
+const uint32_t amo2_fet_vtec_mv = 5000;
 uint32_t amo2_fet_mv;
 uint32_t amo2_fet_ma;
 uint32_t amo2_fet_mw;
@@ -157,7 +164,6 @@ bool amo2_fet_bridge;
 AD7921   amo2_FET_adc(SPI_FLEX_AMO2_FET);
 
 void amo2_FET_init ();
-uint32_t amo2_FET_read ();
 uint32_t amo2_FET_read_mw ();
 
 // Heater
@@ -170,7 +176,7 @@ static bool amo6_sw1_pushed = false;
 static bool amo6_sw2_pushed = false;
 
 void amo6_buttons_init ();
-void amo6_buttons_refresh ();
+void amo6_buttons_update ();
 
 // Screen (AMO6)
 #define AMO6_CLEO_nPWR		PG0
@@ -192,6 +198,9 @@ void amo6_buttons_refresh ();
 #define MY_WHITE    0xffffffUL
 #define MY_PURPLE   0xb3b3ccUL
 #define MY_REDRED   0xff0000UL
+#define CLEO_SELECT		0xADD8E6UL
+#define CLEO_TEC_ON		0x98FB98UL
+#define CLEO_TEC_OFF		0xFF7256UL
 uint32_t amo6_screen_text_color = MY_BLACK;
 uint32_t amo6_screen_line_color = MY_DARKBLUE;
 
@@ -222,7 +231,7 @@ bool amo6_screen_short_press_detected = 0;
 
 void amo6_screen_debug ();
 void amo6_screen_init ();
-void amo6_screen_refresh ();
+void amo6_screen_update ();
 void amo6_screen_draw ();
 void amo6_screen_touch ();
 void amo6_screen_processButtons ();
@@ -311,13 +320,47 @@ void amo2_fault_check()
       amo2_tec_state = false;
     }
   }
+  else if(amo2_tec_state_prev) {
+    if(amo2_fet_mv==0 && amo2_fet_ma==0) {
+      amo2_fault = amo2_fault_tec_open;
+      amo2_fault_prev = amo2_fault_tec_open;
+      amo2_VILM_set_ma(0);
+      amo2_tec_state = false;
+    }
+    else if(amo2_fault_check_tec_pol) {
+      if(amo2_vt_degC_prev > amo2_vpp_degC_prev) {
+        if((amo2_vpp_degC_prev-amo2_vpp_degC)>amo2_fault_check_degC_delta) {
+	  amo2_fault = amo2_fault_tec_pol;
+          amo2_fault_prev = amo2_fault_tec_pol;
+	  amo2_VILM_set_ma(0);
+          amo2_tec_state = false;
+	  amo2_fault_check_tec_pol = false;
+        }
+        else if((amo2_vpp_degC-amo2_vpp_degC_prev)>amo2_fault_check_degC_delta) {
+	  amo2_fault_check_tec_pol = false;
+        }
+      }
+      else {
+        if((amo2_vpp_degC-amo2_vpp_degC_prev)>amo2_fault_check_degC_delta) {
+	  amo2_fault = amo2_fault_tec_pol;
+          amo2_fault_prev = amo2_fault_tec_pol;
+	  amo2_VILM_set_ma(0);
+          amo2_tec_state = false;
+	  amo2_fault_check_tec_pol = false;
+        }
+        else if((amo2_vpp_degC_prev-amo2_vpp_degC)>amo2_fault_check_degC_delta) {
+	  amo2_fault_check_tec_pol = false;
+        }
+      }
+    }
+  }
   else {
     amo2_fault = amo2_fault_none;
-    if (amo2_fault_prev != amo2_fault_tec) amo2_fault_prev = amo2_fault_none;
+    if (amo2_fault_prev == amo2_fault_sensor) amo2_fault_prev = amo2_fault_none; //clear previous error from screen
   }
 }
 
-void amo2_hardware_refresh()
+void amo2_hardware_update()
 {
   if((amo2_pid_p!=amo2_pid_p_prev)||(amo2_pid_i!=amo2_pid_i_prev)||(amo2_pid_d!=amo2_pid_d_prev)) { //PID
     amo2_PID_set_cnts(amo2_pid_p, amo2_pid_i, amo2_pid_d);
@@ -335,9 +378,12 @@ void amo2_hardware_refresh()
   }
   if(amo2_tec_state != amo2_tec_state_prev) { //tec on/off
     if ((amo2_tec_state) && (amo2_fault==amo2_fault_none)) {
+      amo2_fault_check_tec_pol = true;
+      amo2_vpp_degC_prev = amo2_vpp_degC;
       amo2_VILM_set_ma(amo2_vilm_amps*1000);
     }
     else {
+      amo2_fault_check_tec_pol = false;
       amo2_VILM_set_ma(0);
       amo2_tec_state = false;
     }
@@ -487,6 +533,7 @@ uint32_t amo2_FET_read_mw()
   }
   amo2_fet_ma = amo2_fet_ma/size;
   amo2_fet_mv = amo2_fet_mv/size;
+  if(amo2_fet_mv > amo2_fet_vtec_mv) amo2_fet_mv=amo2_fet_vtec_mv;
   
   amo2_fet_mw = (amo2_fet_ma * amo2_fet_mv)/1000;
   amo2_fet_bridge = (AMO2_BRIDGE_PIN >> AMO2_BRIDGE) & 0x01;
@@ -565,7 +612,7 @@ ISR(PCINT0_vect) //SW1 SW2
   sw2_old = sw2_now;
 }
 
-void amo6_buttons_refresh() 
+void amo6_buttons_update() 
 {
   static int tag_old = 0;
   int tag;
@@ -836,7 +883,7 @@ void amo6_screen_init()
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
 }
 
-void amo6_screen_refresh()
+void amo6_screen_update()
 {
     amo6_screen_draw();
     amo6_screen_touch();
@@ -863,7 +910,7 @@ void amo6_screen_draw()
     
   // Temperature Set
   CleO.Tag(amo6_screen_temp_set_tag);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_temp_set_tag] ? MY_GREEN : MY_WHITE);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_temp_set_tag] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(150, AMO6_SCREEN_ROW1_Y, 300, AMO6_SCREEN_ROW1_H);
   sprintf(text_buf, "%02.3f C", amo2_vt_degC);
   CleO.StringExt(FONT_SANS_6, 150, AMO6_SCREEN_ROW1_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
@@ -891,7 +938,7 @@ void amo6_screen_draw()
   
   // PID P
   CleO.Tag(amo6_screen_pid_p_tag);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_p_tag] ? MY_GREEN : MY_WHITE);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_p_tag] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(50, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
   CleO.StringExt(FONT_SANS_3 , 5, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2+5, amo6_screen_text_color, TL, 0, 0, "P");
   sprintf(text_buf, "%d", amo2_pid_p);
@@ -900,7 +947,7 @@ void amo6_screen_draw()
   
   // PID I
   CleO.Tag(amo6_screen_pid_i_tag);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_i_tag] ? MY_GREEN : MY_WHITE);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_i_tag] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(150, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
   CleO.StringExt(FONT_SANS_3 , 105, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2+6, amo6_screen_text_color, TL, 0, 0, "I");
   sprintf(text_buf, "%d", amo2_pid_i);
@@ -909,7 +956,7 @@ void amo6_screen_draw()
   
   // PID D
   CleO.Tag(amo6_screen_pid_d_tag);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_d_tag] ? MY_GREEN : MY_WHITE);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_pid_d_tag] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(250, AMO6_SCREEN_ROW2_Y, 100, AMO6_SCREEN_ROW2_H);
   CleO.StringExt(FONT_SANS_3 , 205, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_ROW2_H/2+6, amo6_screen_text_color, TL, 0, 0, "D");
   sprintf(text_buf, "%d", amo2_pid_d);
@@ -918,7 +965,7 @@ void amo6_screen_draw()
   
   // TEC iLimit
   CleO.Tag(amo6_screen_tec_ilimit_tag);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_ilimit_tag] ? MY_GREEN : MY_WHITE);
+  CleO.RectangleColor(amo6_screen_select[amo6_screen_tec_ilimit_tag] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(390, AMO6_SCREEN_ROW2_Y, 180, AMO6_SCREEN_ROW2_H);
   sprintf(text_buf, "%1.2f A", amo2_vilm_amps);
   CleO.StringExt(FONT_SANS_5 , 390, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
@@ -967,12 +1014,12 @@ void amo6_screen_draw()
   // Enable
   CleO.Tag(amo6_screen_enable_tag);
   //CleO.RectangleColor(amo6_screen_select[amo6_screen_enable_tag] ? MY_GREEN : MY_RED);
-  CleO.RectangleColor(amo2_tec_state ? MY_GREEN : MY_RED);
+  CleO.RectangleColor(amo2_tec_state ? CLEO_TEC_ON : CLEO_TEC_OFF);
   CleO.RectangleXY(240, AMO6_SCREEN_ROW4_Y, 480, AMO6_SCREEN_ROW4_H);
   //sprintf(text_buf, "%d", amo6_screen_enable_sel);
   if (amo2_tec_state) {
     if(amo2_fet_bridge) sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/-1000);
-    else sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000);
+    else                sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000);
     //sprintf(text_buf, "TEC: %02.2f A, %02.2f V, %d", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000, amo2_fet_bridge); 
     //sprintf(text_buf, "TEC: %lu mA, %lu mV, %d", amo2_fet_ma, amo2_fet_mv, amo2_fet_bridge); 
   }
