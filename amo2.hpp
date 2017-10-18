@@ -80,7 +80,7 @@
 // AMO2
 uint32_t  amo2_temp = 0;
 bool amo2_tec_state = false;
-bool amo2_tec_state_prev = false;
+bool amo2_tec_state_latched = false;
 enum{
   amo2_fault_none		, //0
   amo2_fault_sensor		, //1
@@ -89,7 +89,7 @@ enum{
   amo2_fault_tec_open		, //4
 };
 const char* amo2_fault_string[] = {
-  "OFF"				,
+  "TEC Off"				,
   "Sesnor Out of Range"		,
   "TEC Current Out of Range"    ,
   "TEC Polarity Reversed"	,
@@ -109,7 +109,7 @@ const float amo2_vt_uv_to_cnts = 0.0131072;
 uint16_t amo2_vt_cnts_max = 65535;
 uint32_t amo2_vt_uv = 123456;
 double amo2_vt_degC = 25; //initial value
-double amo2_vt_degC_prev = -1000;
+double amo2_vt_degC_latched = -1000;
 int amo2_vt_degC_max = 35;
 int amo2_vt_degC_min = 10;
 AD5541   amo2_VT_dac(SPI_FLEX_AMO2_VT);
@@ -122,7 +122,7 @@ void amo2_VT_set_degC (float degC);
 const float amo2_vilm_ma_to_cnts = 0.07091;
 uint16_t amo2_vilm_ma = 123;
 double amo2_vilm_amps = 5; //initial value
-double amo2_vilm_amps_prev = 0;
+double amo2_vilm_amps_latched = 0;
 int amo2_vilm_amps_max = 5;
 AD5621   amo2_VILM_dac(SPI_FLEX_AMO2_VILM);
 
@@ -131,11 +131,11 @@ void amo2_VILM_set_ma (uint16_t val);
 
 // PID
 uint8_t amo2_pid_p=100; //initial value
-uint8_t amo2_pid_p_prev = 0;
+uint8_t amo2_pid_p_latched = 0;
 uint8_t amo2_pid_i=16; //initial value
-uint8_t amo2_pid_i_prev = 0;
+uint8_t amo2_pid_i_latched = 0;
 uint8_t amo2_pid_d=16; //initial value
-uint8_t amo2_pid_d_prev = 0;
+uint8_t amo2_pid_d_latched = 0;
 AD5290   amo2_PID_rpot(SPI_FLEX_AMO2_PID);
 
 void amo2_PID_init ();
@@ -146,7 +146,7 @@ const float amo2_vpp_cnts_to_uv = 76.29395;
 uint16_t amo2_vpp_cnts_max = 65535;
 uint32_t amo2_vpp_uv = 0;
 double amo2_vpp_degC = 0;
-double amo2_vpp_degC_prev = 0;
+double amo2_vpp_degC_start = 0;
 MAX11100 amo2_VPP_adc(SPI_FLEX_AMO2_VPP);
 
 void amo2_VPP_init();
@@ -307,7 +307,7 @@ void amo2_fault_check()
   if ((amo2_vpp_degC>(amo2_vt_degC_max+2)) || (amo2_vpp_degC<(amo2_vt_degC_min-2))) {
     amo2_fault = amo2_fault_sensor;
     amo2_fault_prev = amo2_fault_sensor;
-    if ( amo2_tec_state_prev) {
+    if ( amo2_tec_state_latched) {
       amo2_VILM_set_ma(0);
       amo2_tec_state = false;
     }
@@ -315,12 +315,12 @@ void amo2_fault_check()
   else if(amo2_fet_ma>((amo2_vilm_amps+1)*1000)) {
     amo2_fault = amo2_fault_tec;
     amo2_fault_prev = amo2_fault_tec;
-    if ( amo2_tec_state_prev) {
+    if ( amo2_tec_state_latched) {
       amo2_VILM_set_ma(0);
       amo2_tec_state = false;
     }
   }
-  else if(amo2_tec_state_prev) {
+  else if(amo2_tec_state_latched) {
     if(amo2_fet_mv==0 && amo2_fet_ma==0) {
       amo2_fault = amo2_fault_tec_open;
       amo2_fault_prev = amo2_fault_tec_open;
@@ -328,27 +328,27 @@ void amo2_fault_check()
       amo2_tec_state = false;
     }
     else if(amo2_fault_check_tec_pol) {
-      if(amo2_vt_degC_prev > amo2_vpp_degC_prev) {
-        if((amo2_vpp_degC_prev-amo2_vpp_degC)>amo2_fault_check_degC_delta) {
+      if(amo2_vt_degC_latched > amo2_vpp_degC_start) {
+        if((amo2_vpp_degC_start-amo2_vpp_degC)>amo2_fault_check_degC_delta) {
 	  amo2_fault = amo2_fault_tec_pol;
           amo2_fault_prev = amo2_fault_tec_pol;
 	  amo2_VILM_set_ma(0);
           amo2_tec_state = false;
 	  amo2_fault_check_tec_pol = false;
         }
-        else if((amo2_vpp_degC-amo2_vpp_degC_prev)>amo2_fault_check_degC_delta) {
+        else if((amo2_vpp_degC-amo2_vpp_degC_start)>amo2_fault_check_degC_delta) {
 	  amo2_fault_check_tec_pol = false;
         }
       }
       else {
-        if((amo2_vpp_degC-amo2_vpp_degC_prev)>amo2_fault_check_degC_delta) {
+        if((amo2_vpp_degC-amo2_vpp_degC_start)>amo2_fault_check_degC_delta) {
 	  amo2_fault = amo2_fault_tec_pol;
           amo2_fault_prev = amo2_fault_tec_pol;
 	  amo2_VILM_set_ma(0);
           amo2_tec_state = false;
 	  amo2_fault_check_tec_pol = false;
         }
-        else if((amo2_vpp_degC_prev-amo2_vpp_degC)>amo2_fault_check_degC_delta) {
+        else if((amo2_vpp_degC_start-amo2_vpp_degC)>amo2_fault_check_degC_delta) {
 	  amo2_fault_check_tec_pol = false;
         }
       }
@@ -362,24 +362,24 @@ void amo2_fault_check()
 
 void amo2_hardware_update()
 {
-  if((amo2_pid_p!=amo2_pid_p_prev)||(amo2_pid_i!=amo2_pid_i_prev)||(amo2_pid_d!=amo2_pid_d_prev)) { //PID
+  if((amo2_pid_p!=amo2_pid_p_latched)||(amo2_pid_i!=amo2_pid_i_latched)||(amo2_pid_d!=amo2_pid_d_latched)) { //PID
     amo2_PID_set_cnts(amo2_pid_p, amo2_pid_i, amo2_pid_d);
-    amo2_pid_p_prev=amo2_pid_p;
-    amo2_pid_i_prev=amo2_pid_i;
-    amo2_pid_d_prev=amo2_pid_d;
+    amo2_pid_p_latched=amo2_pid_p;
+    amo2_pid_i_latched=amo2_pid_i;
+    amo2_pid_d_latched=amo2_pid_d;
   }
-  if(amo2_vt_degC!=amo2_vt_degC_prev) { //vt
+  if(amo2_vt_degC!=amo2_vt_degC_latched) { //vt
     amo2_VT_set_degC(amo2_vt_degC);
-    amo2_vt_degC_prev=amo2_vt_degC;
+    amo2_vt_degC_latched=amo2_vt_degC;
   }
-  if(amo2_vilm_amps!=amo2_vilm_amps_prev) { //vilm
+  if(amo2_vilm_amps!=amo2_vilm_amps_latched) { //vilm
     if ((amo2_tec_state) && (amo2_fault==amo2_fault_none)) amo2_VILM_set_ma(amo2_vilm_amps*1000); //change only when TEC is on
-    amo2_vilm_amps_prev=amo2_vilm_amps;
+    amo2_vilm_amps_latched=amo2_vilm_amps;
   }
-  if(amo2_tec_state != amo2_tec_state_prev) { //tec on/off
+  if(amo2_tec_state != amo2_tec_state_latched) { //tec on/off
     if ((amo2_tec_state) && (amo2_fault==amo2_fault_none)) {
       amo2_fault_check_tec_pol = true;
-      amo2_vpp_degC_prev = amo2_vpp_degC;
+      amo2_vpp_degC_start = amo2_vpp_degC;
       amo2_VILM_set_ma(amo2_vilm_amps*1000);
     }
     else {
@@ -387,7 +387,7 @@ void amo2_hardware_update()
       amo2_VILM_set_ma(0);
       amo2_tec_state = false;
     }
-    amo2_tec_state_prev = amo2_tec_state;
+    amo2_tec_state_latched = amo2_tec_state;
   }
 }
 
@@ -1026,7 +1026,7 @@ void amo6_screen_draw()
   else {
     sprintf(text_buf, "%s", amo2_fault_string[amo2_fault_prev]);
   }
-  CleO.StringExt(FONT_SANS_4 , 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
+  CleO.StringExt(FONT_SANS_5 , 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   
   // Update Screen
   CleO.Show();
@@ -1133,8 +1133,8 @@ void amo6_screen_processShortPress() {
     case amo6_screen_enable_tag	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
-      if ( amo2_tec_state_prev) amo2_tec_state = false;
-      if ((!amo2_tec_state_prev) && (amo2_fault==amo2_fault_none)) { //only when prev state is off and no faults
+      if ( amo2_tec_state_latched) amo2_tec_state = false;
+      if ((!amo2_tec_state_latched) && (amo2_fault==amo2_fault_none)) { //only when prev state is off and no faults
 	amo2_tec_state = true; 
 	amo2_fault_prev = amo2_fault_none;
       }
