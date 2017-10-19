@@ -33,10 +33,10 @@ public:
     do {
         r0 = Noop();
         r1 = Echo();
-	printf("CleO r0=0x%x\n", r0);
-	printf("CleO r1=0x%x\n", r1);
+	//printf("CleO r0=0x%x\n", r0);
+	//printf("CleO r1=0x%x\n", r1);
     } while ((r0 != 0x0000) || (r1 != 0x1d7f));
-    printf("CleO Synced\n");
+    //printf("CleO Synced\n");
     return 0;
   }
 

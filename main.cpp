@@ -70,7 +70,7 @@ int main(void) {
   // ////////////////////////////////////////////////////////////////////////
 
   // give status message
-  printf("Ready\n");
+  printf("AMO2 Ready\n");
   
   // echo
   //char c;
