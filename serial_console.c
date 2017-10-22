@@ -40,6 +40,7 @@ volatile static unsigned char num_bytes;  // number of bytes in buffer
 #endif  // SERIAL_RX_INTERRUPT
 
 static int echo_on = SERIAL_ECHO_ON;
+int uart_eol = 0;
 
 void uart_init() {
   UBRR0H = UBRRH_VALUE;
@@ -70,6 +71,7 @@ ISR(USART0_RX_vect) {
   }
   else {
     serial_buffer[pos_w] = c;
+    if(c=='\r'||c=='\n') uart_eol = 1;
 
     num_bytes++;
     pos_w++;
@@ -157,4 +159,15 @@ void serial_console_echo(const int b) {
 
 void serial_console_echo_reset() {
   echo_on = SERIAL_ECHO_ON;
+}
+
+void serial_console_get_string(char *str) {
+  int i=0;
+  if (uart_eol == 1) {
+    while (num_bytes != 0) {
+      *(str+i) = uart_trygetchar();
+      i++;
+    }
+    uart_eol = 0;
+  }
 }

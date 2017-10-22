@@ -34,6 +34,7 @@ void serial_console_init();
 // sending back the received character
 void serial_console_echo(const int b);
 void serial_console_echo_reset();
+void serial_console_get_string(char *str);
 
 #ifdef __cplusplus
 }
