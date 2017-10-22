@@ -38,7 +38,7 @@
 #endif  // BAUD
 
 // default serial console echo on (1)/off (0) on init
-#define SERIAL_ECHO_ON     1
+#define SERIAL_ECHO_ON     0
 
 // use interrupt-based RX (enabled, if macro is defined)
 #define SERIAL_RX_INTERRUPT 1

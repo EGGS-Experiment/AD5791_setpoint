@@ -4,15 +4,6 @@
 #include <math.h>
 #include <string.h>
 
-/*
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-const int GENERAL_ERROR = 0x00;
-const int END_OF_TOKEN  = 0x01;
-const int END_OF_LINE   = 0x02;
-*/
-
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
 //////////////////////////////////////////////////////////////////////////////////////
@@ -179,6 +170,13 @@ uint32_t amo2_FET_read_mw ();
 // Heater
 
 // Boost
+
+// Serial (AMO6)
+const int amo6_serial_buffer_size = 5;
+char amo6_serial_buffer[amo6_serial_buffer_size+1];
+char amo6_serial_string[amo6_serial_buffer_size+1];
+
+void amo6_serial_parsing ();
 
 // Buttons (AMO6)
 static int8_t amo6_encoder_val = 0;
@@ -549,6 +547,44 @@ uint32_t amo2_FET_read_mw()
   amo2_fet_bridge = (AMO2_BRIDGE_PIN >> AMO2_BRIDGE) & 0x01;
   return amo2_fet_mw;
 }
+//Serial (AMO6)
+void amo6_serial_parsing()
+{
+  char getchar;
+  static int i=0;
+  static int j_prev=0;
+  while (1) {
+    getchar = uart_trygetchar();
+    if(getchar == 0) {
+      break;
+    }
+    else if(getchar=='\r'||getchar=='\n') {
+      int j=0;
+      while(j<i) {
+	amo6_serial_string[j] = amo6_serial_buffer[j];
+	amo6_serial_buffer[j] = 0;
+	j++;
+      }
+      while(j<j_prev) {
+	amo6_serial_string[j] = 0;
+	j++;
+      }
+      j_prev = i;
+      i = 0;
+    }
+    else {
+      if(i>=amo6_serial_buffer_size) {
+	while(i>0) {
+	  amo6_serial_buffer[i]=0;
+	  i--;
+	}
+	amo6_serial_buffer[i]=0;
+      }
+      amo6_serial_buffer[i] = getchar;
+      i++;
+    }
+  }
+}
 
 //Buttons (AMO6)
 void amo6_buttons_init()
@@ -908,74 +944,6 @@ void amo6_screen_update()
 #define AMO6_SCREEN_ROW4_Y	275
 #define AMO6_SCREEN_ROW4_H	90
 
-/*
-#define PARSER_EOL_CHAR_1  '\r'
-#define PARSER_EOL_CHAR_2  '\n'
-
-inline int iseolchar(const char c) {
-  return (c == PARSER_EOL_CHAR_1 || c == PARSER_EOL_CHAR_2);
-}
-
-int checked_get(const int ret_val, const int expect) {
-  // eat *white space* after last tokens
-  // (required to make sure there is no *newline* inbetween tokens
-  // which belong to the same command; scanf(..) will read over newlines!)
-  char c_next = getchar();
-  char c = 0;
-  while (isblank(c_next)) {  // eat all blanks
-    c = c_next;
-    c_next = getchar();
-  }
-  if (iseolchar(c_next))     // keep EOL character
-    c = c_next;
-  else                       // put back any other last read character
-    ungetc(c_next, stdin);
-
-  // checking all cases
-  if (ret_val == 1) {
-    if (isblank(c)) {
-      if (expect & END_OF_TOKEN) {
-        //print_debug(2, "INFO: Read until end of token.\n");
-        return END_OF_TOKEN;
-      }
-      else if (expect & END_OF_LINE) {
-        while (! iseolchar(c))
-          c = getchar();
-        //print_debug(1, "ERROR: Expected end of line.\n");
-      }
-      else {
-        while (! iseolchar(c))
-          c = getchar();
-        //print_debug(0, "FATAL: Unhandled case while reading token (1).\n");
-      }
-    }
-    else if (iseolchar(c)) {
-      if (expect & END_OF_LINE) {
-        //print_debug(2, "INFO: Read until end of line.\n");
-        return END_OF_LINE;
-      }
-      else if (expect & END_OF_TOKEN) {
-        //print_debug(1, "ERROR: Expected further token(s).\n");
-      }
-      else {
-        //print_debug(0, "FATAL: Unhandled case while reading token (2).\n");
-      }
-    }
-    else {
-      while (! iseolchar(c))
-        c = getchar();
-      //print_debug(1, "ERROR: Invalid token or token too long.\n");
-    }
-  }
-  else {
-    while (! iseolchar(c))
-      c = getchar();
-    //print_debug(1, "ERROR: Invalid token.\n");
-  }
-
-  return GENERAL_ERROR;
-}
-*/
 void amo6_screen_draw()
 { 
   char text_buf[50];
@@ -1104,30 +1072,8 @@ void amo6_screen_draw()
   else {
     sprintf(text_buf, "%s", amo2_fault_string[amo2_fault_prev]);
   }
-  //char my_str[3];
-  //char* my_str_ptr;
-  //my_str[0]='m';
-  //my_str[1]='y';
-  //my_str[2]='\0';
-  //serial_console_get_string(my_str_ptr);
-  //sprintf(text_buf, "%s", my_str_ptr);
-  //char my_str[SERIAL_BUFFER_SIZE];
-  //serial_console_get_string(my_str);
-  // read command name
-  char string[255];
-  //scanf("%32s", string);
-  serial_console_get_string(string);
-  sprintf(text_buf, "%s", string);
-  /*
-  int ret_val = checked_get(scanf("%32s", string),
-                            END_OF_TOKEN | END_OF_LINE);
-  if (ret_val) {
-    sprintf(text_buf, "%s", string);
-  }
-  else {
-    sprintf(text_buf, "%s", "null");
-  }*/
-  CleO.StringExt(FONT_SANS_5 , 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
+  sprintf(text_buf, "%s", amo6_serial_string);
+  CleO.StringExt(FONT_SANS_5, 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   
   // Update Screen
   CleO.Show();
