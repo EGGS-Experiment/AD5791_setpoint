@@ -70,36 +70,14 @@ int main(void) {
   // ////////////////////////////////////////////////////////////////////////
 
   // give status message
-  printf("AMO2 Ready\n");
-  
-  // echo
-  //char c;
-  
-  // serial
-  //char string[33];
-  //int readcnt=0;
+  printf("%s\n", device_name);
+  printf("Device ID : %s\n", device_id);
+  printf("Hardware ID : %s\n", hardware_id);
+  printf("Firmware ID : %s\n", firmware_id);
   
   uint16_t counter=0;
   bool no_op=1;
   for (;;) {
-    /*
-    c = getchar();
-    putchar(c);
-
-    if (c == '1') {
-      amo1_setVDD1cnts(0);
-      led_blink(1);
-    }
-    if (c == '2') {
-      amo1_setVDD1cnts(amo1_vdd1_cnts);
-      led_blink(2);
-    }
-    if (c == '3') {
-      amo1_setVDD1cnts(47850);
-      led_blink(3);
-    }
-    */
-    
     if (counter%90==0) {
       //amo2_VPP_read_uv();
       amo2_VPP_read_degC();
@@ -107,19 +85,16 @@ int main(void) {
       amo2_fault_check();
       no_op=0;
     }
-    
     if (counter%100==0) {
-      amo6_serial_update();
       amo6_buttons_update();
+      amo6_serial_update();
       amo6_screen_update();
       no_op=0;
     }
-    
     if (counter%250==0) {
       amo2_hardware_update();
       no_op=0;
     }
-    
     if (no_op) _delay_ms(1);
     else no_op=1;
     counter++;

@@ -1,8 +1,17 @@
 #ifndef AMO2_H
 #define AMO2_H 1
 
+#include <stdlib.h>
 #include <math.h>
 #include <string.h>
+
+//////////////////////////////////////////////////////////////////////////////////////
+// Tracking
+//////////////////////////////////////////////////////////////////////////////////////
+const char device_name[] = "TEC Temperature Controller";
+const char device_id[]   = "AMO2";
+const char hardware_id[] = "0.0.0";
+const char firmware_id[] = "0.0.4";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -171,15 +180,6 @@ uint32_t amo2_FET_read_mw ();
 
 // Boost
 
-// Serial (AMO6)
-const int amo6_serial_buffer_size = 50;
-char amo6_serial_buffer[amo6_serial_buffer_size+1];
-char amo6_serial_string[amo6_serial_buffer_size+1];
-int amo6_serial_test = 0;
-
-void amo6_serial_update ();
-void amo6_serial_parsing ();
-
 // Buttons (AMO6)
 static int8_t amo6_encoder_val = 0;
 static bool amo6_sw1_pushed = false;
@@ -187,6 +187,15 @@ static bool amo6_sw2_pushed = false;
 
 void amo6_buttons_init ();
 void amo6_buttons_update ();
+
+// Serial (AMO6)
+const int amo6_serial_buffer_size = 50;
+char amo6_serial_buffer[amo6_serial_buffer_size+1];
+char amo6_serial_string[amo6_serial_buffer_size+1];
+
+void amo6_serial_update ();
+void amo6_serial_string_parse ();
+
 
 // Screen (AMO6)
 #define AMO6_CLEO_nPWR		PG0
@@ -253,7 +262,7 @@ void amo6_screen_processShortPress ();
 //////////////////////////////////////////////////////////////////////////////////////
 
 //AMO2 
-void amo2_init()
+void amo2_init ()
 {
   // hardware i/o config
   AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR);//output
@@ -312,7 +321,7 @@ void amo2_init()
 //  _delay_ms(5000);
 }
 
-void amo2_fault_check()
+void amo2_fault_check ()
 {
   if ((amo2_vpp_degC>(amo2_vt_degC_max+2)) || (amo2_vpp_degC<(amo2_vt_degC_min-2))) {
     amo2_fault = amo2_fault_sensor;
@@ -370,7 +379,7 @@ void amo2_fault_check()
   }
 }
 
-void amo2_hardware_update()
+void amo2_hardware_update ()
 {
   if((amo2_pid_p!=amo2_pid_p_latched)||(amo2_pid_i!=amo2_pid_i_latched)||(amo2_pid_d!=amo2_pid_d_latched)) { //PID
     amo2_PID_set_cnts(amo2_pid_p, amo2_pid_i, amo2_pid_d);
@@ -402,7 +411,7 @@ void amo2_hardware_update()
 }
 
 //VT
-void amo2_VT_init()
+void amo2_VT_init ()
 {
   amo2_VT_dac.setCounts(32768); //mid
   //amo2_VT_dac.setCounts(0); //offset test
@@ -413,7 +422,7 @@ void amo2_VT_init()
   //amo2_VT_dac.setcounts(65535); //high
 }
 
-void amo2_VT_set_uv(uint32_t val)
+void amo2_VT_set_uv (uint32_t val)
 {
   amo2_vt_uv = val;
   val = amo2_vt_uv * amo2_vt_uv_to_cnts;
@@ -421,7 +430,7 @@ void amo2_VT_set_uv(uint32_t val)
   amo2_VT_dac.setCounts(val);
 }
 
-void amo2_VT_set_degC(float degC)
+void amo2_VT_set_degC (float degC)
 {
   uint16_t r_ref = 20000;
   float r25c = 10103.9;
@@ -435,7 +444,7 @@ void amo2_VT_set_degC(float degC)
 }
 
 //VILM
-void amo2_VILM_init()
+void amo2_VILM_init ()
 {
   amo2_VILM_dac.setCounts(0); //low
   
@@ -446,7 +455,7 @@ void amo2_VILM_init()
   //amo2_VILM_dac.setCounts(820);  //1.25A
 }
 
-void amo2_VILM_set_ma(uint16_t val)
+void amo2_VILM_set_ma (uint16_t val)
 {
   amo2_vilm_ma = val;
   val = amo2_vilm_ma * amo2_vilm_ma_to_cnts;
@@ -455,7 +464,7 @@ void amo2_VILM_set_ma(uint16_t val)
 }
 
 //PID
-void amo2_PID_init()
+void amo2_PID_init ()
 {
   amo2_PID_rpot.setCounts(0x000000); //low
   
@@ -469,7 +478,7 @@ void amo2_PID_init()
   
 }
 
-void amo2_PID_set_cnts(uint8_t p, uint8_t i, uint8_t d)
+void amo2_PID_set_cnts (uint8_t p, uint8_t i, uint8_t d)
 {
   amo2_pid_p = p;
   amo2_pid_i = i;
@@ -483,18 +492,18 @@ void amo2_PID_set_cnts(uint8_t p, uint8_t i, uint8_t d)
 }
 
 //VPp
-void amo2_VPP_init()
+void amo2_VPP_init ()
 {
 }
 
-uint32_t amo2_VPP_read_uv()
+uint32_t amo2_VPP_read_uv ()
 {
   uint32_t val = amo2_VPP_adc.readCounts();
   amo2_vpp_uv = val * amo2_vpp_cnts_to_uv;
   return amo2_vpp_uv;
 }
 
-double amo2_VPP_read_degC()
+double amo2_VPP_read_degC ()
 {
   // NTCALUG02A103F constants from -5C to 35C
   double a = 0.001135517850;
@@ -512,13 +521,13 @@ double amo2_VPP_read_degC()
 }
 
 //FET
-void amo2_FET_init()
+void amo2_FET_init ()
 {
   // testing
   //amo2_FET_adc.readCounts();
 }
 
-uint32_t amo2_FET_read_mw()
+uint32_t amo2_FET_read_mw ()
 {
   static uint8_t size = 5;
   static uint8_t idx = 0;
@@ -550,75 +559,8 @@ uint32_t amo2_FET_read_mw()
   return amo2_fet_mw;
 }
 
-//Serial (AMO6)
-void amo6_serial_update()
-{
-  char getchar;
-  static int i=0;
-  static int j_prev=0;
-  while (1) {
-    getchar = uart_trygetchar();
-    if(getchar == 0) {
-      break;
-    }
-    else if(getchar=='\r'||getchar=='\n') {
-      if(i>0) {
-        int j=0;
-        while(j<i) {
-	  amo6_serial_string[j] = amo6_serial_buffer[j];
-	  amo6_serial_buffer[j] = 0;
-	  j++;
-        }
-        while(j<j_prev) {
-	  amo6_serial_string[j] = 0;
-	  j++;
-        }
-        j_prev = i;
-        i = 0;
-	amo6_serial_parsing();
-      }
-    }
-    else {
-      if(i>=amo6_serial_buffer_size) {
-	while(i>0) {
-	  amo6_serial_buffer[i]=0;
-	  i--;
-	}
-	amo6_serial_buffer[i]=0;
-      }
-      amo6_serial_buffer[i] = getchar;
-      i++;
-    }
-  }
-}
-
-void amo6_serial_parsing()
-{
-  char delimiters[] = " ";
-  //char *token[3];
-  char *token;
-  int i=0;
-  
-  token = strtok(amo6_serial_string, delimiters);
-  if(strcmp(token,"set")==0) {
-    amo6_serial_test = 1;
-  }
-  else {
-    amo6_serial_test = 0;
-  }
-  
-  i++;
-  
-  while(i<3) {
-    /*
-    amo6_serial_token[i] = strtok (NULL, delimiters);
-    if(amo6_serial_token[i] == NULL) break;*/
-    i++;
-  }
-}
-
 //Buttons (AMO6)
-void amo6_buttons_init()
+void amo6_buttons_init ()
 {
   // ENC_A
   DDRD   &= ~_BV(PD2);   //input
@@ -689,7 +631,7 @@ ISR(PCINT0_vect) //SW1 SW2
   sw2_old = sw2_now;
 }
 
-void amo6_buttons_update() 
+void amo6_buttons_update () 
 {
   static int tag_old = 0;
   int tag;
@@ -917,8 +859,77 @@ void amo6_buttons_update()
   tag_old = tag;
 }
 
+//Serial (AMO6)
+void amo6_serial_update ()
+{
+  char getchar;
+  static int i=0;
+  static int j_prev=0;
+  while (1) {
+    getchar = uart_trygetchar();
+    if(getchar == 0) {
+      break;
+    }
+    else if(getchar=='\r'||getchar=='\n') {
+      if(i>0) {
+        int j=0;
+        while(j<i) {
+	  amo6_serial_string[j] = amo6_serial_buffer[j];
+	  amo6_serial_buffer[j] = 0;
+	  j++;
+        }
+        while(j<j_prev) {
+	  amo6_serial_string[j] = 0;
+	  j++;
+        }
+        j_prev = i;
+        i = 0;
+	amo6_serial_string_parse();
+      }
+    }
+    else {
+      if(i>=amo6_serial_buffer_size) {
+	while(i>0) {
+	  amo6_serial_buffer[i]=0;
+	  i--;
+	}
+	amo6_serial_buffer[i]=0;
+      }
+      amo6_serial_buffer[i] = getchar;
+      i++;
+    }
+  }
+}
+
+void amo6_serial_string_parse ()
+{
+  char delimiters[] = " ";
+  char *token[5];
+  int i=0;
+  float tmp;
+  
+  token[0] = strtok(amo6_serial_string, delimiters);
+  i++;
+  while(i<5) {
+    token[i] = strtok (NULL, delimiters);
+    if(token[i] == NULL) break;
+    i++;
+  }
+  
+  if(strcmp(token[0],"s.temp")==0) {
+    if(i==2) {
+      tmp=atof(token[1]);
+      if (tmp>amo2_vt_degC_max) tmp=amo2_vt_degC_max;
+      if (tmp<amo2_vt_degC_min) tmp=amo2_vt_degC_min;
+      amo2_vt_degC = tmp;
+    }
+  }
+  else {
+  }
+}
+
 //Screen (AMO6)
-void amo6_screen_debug()
+void amo6_screen_debug ()
 {
   printf("CleO Version = %d\n", CleO.Version());
   printf("CleO ID = %d\n", CleO.ModuleIdentifier());
@@ -928,7 +939,7 @@ void amo6_screen_debug()
   //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
 }
 
-void amo6_screen_init()
+void amo6_screen_init ()
 {
   char buf_text[20];
   AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR); //output
@@ -942,16 +953,16 @@ void amo6_screen_init()
   CleO.Start();
   CleO.RectangleJustification(MM);
   CleO.SetBackgroundcolor(0xe9d3ebUL);
-  sprintf(buf_text,"TEC Temperature Controller");
+  sprintf(buf_text,device_name);
   CleO.StringExt(FONT_SANS_4, AMO6_SCREEN_W/2, 30, amo6_screen_text_color, MM, 0, 0, buf_text);
-  sprintf(buf_text,"Device ID : AMO2");
+  sprintf(buf_text,"Device ID : %s", device_id);
   CleO.StringExt(FONT_BIT_3, 10, 100, amo6_screen_text_color, ML, 0, 0, buf_text);
-  sprintf(buf_text,"Hardware ID : 0.0.0");
+  sprintf(buf_text,"Hardware ID : %s", hardware_id);
   CleO.StringExt(FONT_BIT_3 , 10 , 120 , amo6_screen_text_color , ML , 0 , 0, buf_text);
-  sprintf(buf_text,"Firmware ID : 0.0.0");
+  sprintf(buf_text,"Firmware ID : %s", firmware_id);
   CleO.StringExt(FONT_BIT_3, 10, 140, amo6_screen_text_color, ML, 0, 0, buf_text);
 //  sprintf(buf_text,"%lu,%2.2f,%0.5f,%lu", amo1_iout_max_set_ua/1000, amo1_iout_res, amo1_iout_ua_to_cnts, amo1_pfet_max_mw);
-  CleO.StringExt(FONT_BIT_3, 10, 180, amo6_screen_text_color, ML, 0, 0, buf_text);
+//  CleO.StringExt(FONT_BIT_3, 10, 180, amo6_screen_text_color, ML, 0, 0, buf_text);
   sprintf(buf_text,"Starting Up ... ");
   CleO.StringExt(FONT_BIT_4 , 10 , 220 , amo6_screen_text_color , ML , 0 , 0, buf_text);
   CleO.Show();
@@ -960,7 +971,7 @@ void amo6_screen_init()
   CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
 }
 
-void amo6_screen_update()
+void amo6_screen_update ()
 {
     amo6_screen_draw();
     amo6_screen_touch();
@@ -975,7 +986,7 @@ void amo6_screen_update()
 #define AMO6_SCREEN_ROW4_Y	275
 #define AMO6_SCREEN_ROW4_H	90
 
-void amo6_screen_draw()
+void amo6_screen_draw ()
 { 
   char text_buf[50];
     
@@ -1097,27 +1108,23 @@ void amo6_screen_draw()
   if (amo2_tec_state) {
     if(amo2_fet_bridge) sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/-1000);
     else                sprintf(text_buf, "TEC = %02.2fA, %02.2fV", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000);
-    //sprintf(text_buf, "TEC: %02.2f A, %02.2f V, %d", (double) amo2_fet_ma/1000, (double) (amo2_fet_vtec_mv-amo2_fet_mv)/1000, amo2_fet_bridge); 
-    //sprintf(text_buf, "TEC: %lu mA, %lu mV, %d", amo2_fet_ma, amo2_fet_mv, amo2_fet_bridge); 
   }
   else {
     sprintf(text_buf, "%s", amo2_fault_string[amo2_fault_prev]);
   }
-  //sprintf(text_buf, "%s", amo6_serial_buffer);
-  sprintf(text_buf, "%d", amo6_serial_test);
   CleO.StringExt(FONT_SANS_5, 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   
   // Update Screen
   CleO.Show();
 }
 
-void amo6_screen_touch()
+void amo6_screen_touch ()
 {
   amo6_screen_processButtons();
   if (amo6_screen_short_press_detected) amo6_screen_processShortPress();
 }
 
-void amo6_screen_processButtons()
+void amo6_screen_processButtons ()
 {
   // Collet Tags
   //NOTE: for more than 13 tags, you must manually tag!
@@ -1139,7 +1146,7 @@ void amo6_screen_shortPress (bool *press_detected)
   }
 }
 
-void amo6_screen_processShortPress() {
+void amo6_screen_processShortPress () {
   int i;
   bool sel;
   
