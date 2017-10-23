@@ -109,7 +109,7 @@ int main(void) {
     }
     
     if (counter%100==0) {
-      amo6_serial_parsing();
+      amo6_serial_update();
       amo6_buttons_update();
       amo6_screen_update();
       no_op=0;

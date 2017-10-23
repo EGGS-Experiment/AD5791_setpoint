@@ -172,10 +172,12 @@ uint32_t amo2_FET_read_mw ();
 // Boost
 
 // Serial (AMO6)
-const int amo6_serial_buffer_size = 5;
+const int amo6_serial_buffer_size = 50;
 char amo6_serial_buffer[amo6_serial_buffer_size+1];
 char amo6_serial_string[amo6_serial_buffer_size+1];
+int amo6_serial_test = 0;
 
+void amo6_serial_update ();
 void amo6_serial_parsing ();
 
 // Buttons (AMO6)
@@ -549,7 +551,7 @@ uint32_t amo2_FET_read_mw()
 }
 
 //Serial (AMO6)
-void amo6_serial_parsing()
+void amo6_serial_update()
 {
   char getchar;
   static int i=0;
@@ -573,6 +575,7 @@ void amo6_serial_parsing()
         }
         j_prev = i;
         i = 0;
+	amo6_serial_parsing();
       }
     }
     else {
@@ -586,6 +589,31 @@ void amo6_serial_parsing()
       amo6_serial_buffer[i] = getchar;
       i++;
     }
+  }
+}
+
+void amo6_serial_parsing()
+{
+  char delimiters[] = " ";
+  //char *token[3];
+  char *token;
+  int i=0;
+  
+  token = strtok(amo6_serial_string, delimiters);
+  if(strcmp(token,"set")==0) {
+    amo6_serial_test = 1;
+  }
+  else {
+    amo6_serial_test = 0;
+  }
+  
+  i++;
+  
+  while(i<3) {
+    /*
+    amo6_serial_token[i] = strtok (NULL, delimiters);
+    if(amo6_serial_token[i] == NULL) break;*/
+    i++;
   }
 }
 
@@ -1075,7 +1103,8 @@ void amo6_screen_draw()
   else {
     sprintf(text_buf, "%s", amo2_fault_string[amo2_fault_prev]);
   }
-  sprintf(text_buf, "%s", amo6_serial_string);
+  //sprintf(text_buf, "%s", amo6_serial_buffer);
+  sprintf(text_buf, "%d", amo6_serial_test);
   CleO.StringExt(FONT_SANS_5, 240, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color , MM , 0 , 0, text_buf);
   
   // Update Screen
