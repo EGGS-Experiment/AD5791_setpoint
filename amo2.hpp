@@ -547,6 +547,7 @@ uint32_t amo2_FET_read_mw()
   amo2_fet_bridge = (AMO2_BRIDGE_PIN >> AMO2_BRIDGE) & 0x01;
   return amo2_fet_mw;
 }
+
 //Serial (AMO6)
 void amo6_serial_parsing()
 {
@@ -559,18 +560,20 @@ void amo6_serial_parsing()
       break;
     }
     else if(getchar=='\r'||getchar=='\n') {
-      int j=0;
-      while(j<i) {
-	amo6_serial_string[j] = amo6_serial_buffer[j];
-	amo6_serial_buffer[j] = 0;
-	j++;
+      if(i>0) {
+        int j=0;
+        while(j<i) {
+	  amo6_serial_string[j] = amo6_serial_buffer[j];
+	  amo6_serial_buffer[j] = 0;
+	  j++;
+        }
+        while(j<j_prev) {
+	  amo6_serial_string[j] = 0;
+	  j++;
+        }
+        j_prev = i;
+        i = 0;
       }
-      while(j<j_prev) {
-	amo6_serial_string[j] = 0;
-	j++;
-      }
-      j_prev = i;
-      i = 0;
     }
     else {
       if(i>=amo6_serial_buffer_size) {
