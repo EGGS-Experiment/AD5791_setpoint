@@ -11,7 +11,7 @@
 const char device_name[] = "TEC Temperature Controller";
 const char device_id[]   = "AMO2";
 const char hardware_id[] = "0.0.0";
-const char firmware_id[] = "0.0.5";
+const char firmware_id[] = "0.0.6";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -115,13 +115,20 @@ void amo2_fault_check ();
 void amo2_hardware_update ();
 
 // Sensor
-//  NTCALUG02A103F constants from -5C to 35C
+//  NTCALUG02A103F constants from 5C to 35C
 uint16_t amo2_sensor_r_ref = 20000;
-double amo2_sensor_r25c = 10103.9;
-double amo2_sensor_beta = 3813.85;
-double amo2_sensor_a = 0.001135517850;
-double amo2_sensor_b = 0.0002330724285;
-double amo2_sensor_c = 0.00000009192831104;
+double amo2_sensor_r25c = 10000.0;
+double amo2_sensor_beta = 3862.14;
+double amo2_sensor_a = 0.001136099080;
+double amo2_sensor_b = 0.0002329786514;
+double amo2_sensor_c = 0.00000009228611999;
+//  NTCALUG02A103F constants from -5C to 35C
+//uint16_t amo2_sensor_r_ref = 20000;
+//double amo2_sensor_r25c = 10103.9;
+//double amo2_sensor_beta = 3813.85;
+//double amo2_sensor_a = 0.001135517850;
+//double amo2_sensor_b = 0.0002330724285;
+//double amo2_sensor_c = 0.00000009192831104;
 
 // VT
 const float amo2_vt_uv_to_cnts = 0.0131072;
@@ -440,9 +447,6 @@ void amo2_VT_set_uv (uint32_t val)
 
 void amo2_VT_set_degC (float degC)
 {
-  //uint16_t r_ref = 20000;
-  //float r25c = 10103.9;
-  //float beta = 3813.85;
   float r = amo2_sensor_r25c * exp(amo2_sensor_beta*(1/(degC+273.15)-1/298.15));
   r = (r/amo2_sensor_r_ref+1);
   if (r<1) r=1;
@@ -513,12 +517,6 @@ uint32_t amo2_VPP_read_uv ()
 
 double amo2_VPP_read_degC ()
 {
-  // NTCALUG02A103F constants from -5C to 35C
-  //double a = 0.001135517850;
-  //double b = 0.0002330724285;
-  //double c = 0.00000009192831104;
-  //uint16_t r_ref = 20000;
-  
   // calculate temperature
   double val = amo2_VPP_adc.readCounts();
   val = log((amo2_vpp_cnts_max/val-1)*amo2_sensor_r_ref);
@@ -997,7 +995,7 @@ void amo6_serial_parse ()
   }
   else if(strcmp(token[0],"sensor.r")==0) {
     if(i==1) {
-      printf("r_ref=%u, r25c=%f, beta=%f, a=%0.17f, b=%0.17f, c=%0.17f\n", amo2_sensor_r_ref, amo2_sensor_r25c, amo2_sensor_beta, amo2_sensor_a, amo2_sensor_b, amo2_sensor_c);
+      printf("r_ref=%u, r25c=%f, beta=%f, a=%0.10f, b=%0.10f, c=%0.10f\n", amo2_sensor_r_ref, amo2_sensor_r25c, amo2_sensor_beta, amo2_sensor_a*1000, amo2_sensor_b*10000, amo2_sensor_c*10000000);
     }
   }
   else if(strcmp(token[0],"sensor.w")==0) {
@@ -1008,9 +1006,9 @@ void amo6_serial_parse ()
       amo2_sensor_r_ref = atof(token[1]);
       amo2_sensor_r25c  = atof(token[2]);
       amo2_sensor_beta  = atof(token[3]);
-      amo2_sensor_a     = atof(token[4]);
-      amo2_sensor_b     = atof(token[5]);
-      amo2_sensor_c     = atof(token[6]);
+      amo2_sensor_a     = atof(token[4])/1000;
+      amo2_sensor_b     = atof(token[5])/10000;
+      amo2_sensor_c     = atof(token[6])/10000000;
     }
   }
   else if(strcmp(token[0],"id?")==0) {
