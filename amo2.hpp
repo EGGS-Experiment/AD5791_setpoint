@@ -115,7 +115,7 @@ void amo2_fault_check ();
 void amo2_hardware_update ();
 
 // Sensor
-//  NTCALUG02A103F constants from 5C to 35C
+//  NTCALUG02A103F constants from 10C to 35C
 uint16_t amo2_sensor_r_ref = 20000;
 double amo2_sensor_r25c = 10000.0;
 double amo2_sensor_beta = 3862.14;
