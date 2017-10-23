@@ -74,6 +74,7 @@ int main(void) {
   printf("Device ID : %s\n", device_id);
   printf("Hardware ID : %s\n", hardware_id);
   printf("Firmware ID : %s\n", firmware_id);
+  printf("Device Ready\n");
   
   uint16_t counter=0;
   bool no_op=1;

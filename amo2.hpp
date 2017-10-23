@@ -11,7 +11,7 @@
 const char device_name[] = "TEC Temperature Controller";
 const char device_id[]   = "AMO2";
 const char hardware_id[] = "0.0.0";
-const char firmware_id[] = "0.0.4";
+const char firmware_id[] = "0.0.5";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -114,6 +114,15 @@ void amo2_init ();
 void amo2_fault_check ();
 void amo2_hardware_update ();
 
+// Sensor
+//  NTCALUG02A103F constants from -5C to 35C
+uint16_t amo2_sensor_r_ref = 20000;
+double amo2_sensor_r25c = 10103.9;
+double amo2_sensor_beta = 3813.85;
+double amo2_sensor_a = 0.001135517850;
+double amo2_sensor_b = 0.0002330724285;
+double amo2_sensor_c = 0.00000009192831104;
+
 // VT
 const float amo2_vt_uv_to_cnts = 0.0131072;
 uint16_t amo2_vt_cnts_max = 65535;
@@ -189,13 +198,12 @@ void amo6_buttons_init ();
 void amo6_buttons_update ();
 
 // Serial (AMO6)
-const int amo6_serial_buffer_size = 50;
+const int amo6_serial_buffer_size = 100;
 char amo6_serial_buffer[amo6_serial_buffer_size+1];
 char amo6_serial_string[amo6_serial_buffer_size+1];
 
 void amo6_serial_update ();
-void amo6_serial_string_parse ();
-
+void amo6_serial_parse ();
 
 // Screen (AMO6)
 #define AMO6_CLEO_nPWR		PG0
@@ -432,11 +440,11 @@ void amo2_VT_set_uv (uint32_t val)
 
 void amo2_VT_set_degC (float degC)
 {
-  uint16_t r_ref = 20000;
-  float r25c = 10103.9;
-  float beta = 3813.85;
-  float r = r25c * exp(beta*(1/(degC+273.15)-1/298.15));
-  r = (r/r_ref+1);
+  //uint16_t r_ref = 20000;
+  //float r25c = 10103.9;
+  //float beta = 3813.85;
+  float r = amo2_sensor_r25c * exp(amo2_sensor_beta*(1/(degC+273.15)-1/298.15));
+  r = (r/amo2_sensor_r_ref+1);
   if (r<1) r=1;
   uint32_t counts = amo2_vt_cnts_max / r;
   amo2_VT_dac.setCounts(counts);
@@ -506,17 +514,17 @@ uint32_t amo2_VPP_read_uv ()
 double amo2_VPP_read_degC ()
 {
   // NTCALUG02A103F constants from -5C to 35C
-  double a = 0.001135517850;
-  double b = 0.0002330724285;
-  double c = 0.00000009192831104;
-  uint16_t r_ref = 20000;
+  //double a = 0.001135517850;
+  //double b = 0.0002330724285;
+  //double c = 0.00000009192831104;
+  //uint16_t r_ref = 20000;
   
   // calculate temperature
   double val = amo2_VPP_adc.readCounts();
-  val = log((amo2_vpp_cnts_max/val-1)*r_ref);
+  val = log((amo2_vpp_cnts_max/val-1)*amo2_sensor_r_ref);
   //amo2_vpp_degC = val;
   //amo2_vpp_degC = (a+b*val+c*val*val*val);
-  amo2_vpp_degC = 1/(a+b*val+c*val*val*val)-273.15;
+  amo2_vpp_degC = 1/(amo2_sensor_a+amo2_sensor_b*val+amo2_sensor_c*val*val*val)-273.15;
   return amo2_vpp_degC;
 }
 
@@ -884,7 +892,7 @@ void amo6_serial_update ()
         }
         j_prev = i;
         i = 0;
-	amo6_serial_string_parse();
+	amo6_serial_parse();
       }
     }
     else {
@@ -901,31 +909,121 @@ void amo6_serial_update ()
   }
 }
 
-void amo6_serial_string_parse ()
+void amo6_serial_parse ()
 {
   char delimiters[] = " ";
-  char *token[5];
+  char *token[8];
   int i=0;
   float tmp;
   
   token[0] = strtok(amo6_serial_string, delimiters);
   i++;
-  while(i<5) {
+  while(i<8) {
     token[i] = strtok (NULL, delimiters);
     if(token[i] == NULL) break;
     i++;
   }
   
-  if(strcmp(token[0],"s.temp")==0) {
+  if(strcmp(token[0],"out.w")==0) {
     if(i==2) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      tmp=atof(token[1]);
+      if(tmp==0) {
+	if ( amo2_tec_state_latched) amo2_tec_state = false;
+      }
+      else if(tmp==1) {
+        if ((!amo2_tec_state_latched) && (amo2_fault==amo2_fault_none)) { //only when prev state is off and no faults
+	  amo2_tec_state = true; 
+	  amo2_fault_prev = amo2_fault_none;
+        }
+      }
+    }
+  }
+  else if(strcmp(token[0],"iout.w")==0) {
+    if(i==2) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      tmp=atof(token[1]);
+      if (tmp>amo2_vilm_amps_max) tmp=amo2_vilm_amps_max;
+      if (tmp<0) tmp=0;
+      amo2_vilm_amps = tmp;
+    }
+  }
+  else if(strcmp(token[0],"temp.w")==0) {
+    if(i==2) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
       tmp=atof(token[1]);
       if (tmp>amo2_vt_degC_max) tmp=amo2_vt_degC_max;
       if (tmp<amo2_vt_degC_min) tmp=amo2_vt_degC_min;
       amo2_vt_degC = tmp;
     }
   }
+  else if(strcmp(token[0],"temp.r")==0) {
+    if(i==1) {
+      printf("temp = %03.3f C\n", amo2_vpp_degC);
+    }
+  }
+  else if(strcmp(token[0],"p.w")==0) {
+    if(i==2) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      tmp=atof(token[1]);
+      if (tmp>255) tmp=255;
+      if (tmp<0) tmp=0;
+      amo2_pid_p = tmp;
+    }
+  }
+  else if(strcmp(token[0],"i.w")==0) {
+    if(i==2) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      tmp=atof(token[1]);
+      if (tmp>255) tmp=255;
+      if (tmp<0) tmp=0;
+      amo2_pid_i = tmp;
+    }
+  }
+  else if(strcmp(token[0],"d.w")==0) {
+    if(i==2) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      tmp=atof(token[1]);
+      if (tmp>255) tmp=255;
+      if (tmp<0) tmp=0;
+      amo2_pid_d = tmp;
+    }
+  }
+  else if(strcmp(token[0],"sensor.r")==0) {
+    if(i==1) {
+      printf("r_ref=%u, r25c=%f, beta=%f, a=%0.17f, b=%0.17f, c=%0.17f\n", amo2_sensor_r_ref, amo2_sensor_r25c, amo2_sensor_beta, amo2_sensor_a, amo2_sensor_b, amo2_sensor_c);
+    }
+  }
+  else if(strcmp(token[0],"sensor.w")==0) {
+    if(i==7) {
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      if ( amo2_tec_state_latched) amo2_tec_state = false;
+      amo2_sensor_r_ref = atof(token[1]);
+      amo2_sensor_r25c  = atof(token[2]);
+      amo2_sensor_beta  = atof(token[3]);
+      amo2_sensor_a     = atof(token[4]);
+      amo2_sensor_b     = atof(token[5]);
+      amo2_sensor_c     = atof(token[6]);
+    }
+  }
+  else if(strcmp(token[0],"id?")==0) {
+    if(i==1) {
+      printf("%s\n", device_name);
+      printf("Device ID : %s\n", device_id);
+      printf("Hardware ID : %s\n", hardware_id);
+      printf("Firmware ID : %s\n", firmware_id);
+    }
+  }
   else {
   }
+  AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
 }
 
 //Screen (AMO6)
