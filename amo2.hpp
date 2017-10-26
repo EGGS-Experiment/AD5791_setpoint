@@ -100,7 +100,7 @@ enum{
 };
 const char* amo2_fault_string[] = {
   "TEC Off"				,
-  "Sesnor Out of Range"		,
+  "Sensor Out of Range"		,
   "TEC Current Out of Range"    ,
   "TEC Polarity Reversed"	,
   "TEC Not Connected"		,
