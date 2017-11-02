@@ -11,7 +11,7 @@
 const char device_name[] = "TEC Temperature Controller";
 const char device_id[]   = "AMO2";
 const char hardware_id[] = "0.0.0";
-const char firmware_id[] = "0.0.6";
+const char firmware_id[] = "0.0.7";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -333,7 +333,7 @@ void amo2_init ()
   amo2_FET_init();
   amo6_screen_init();
   amo6_buttons_init();
-//  _delay_ms(5000);
+  _delay_ms(5000);
 }
 
 void amo2_fault_check ()
