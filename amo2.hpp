@@ -11,7 +11,7 @@
 const char device_name[] = "TEC Temperature Controller";
 const char device_id[]   = "AMO2";
 const char hardware_id[] = "0.0.0";
-const char firmware_id[] = "0.0.7";
+const char firmware_id[] = "0.0.8";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -97,13 +97,15 @@ enum{
   amo2_fault_tec		, //2
   amo2_fault_tec_pol		, //3
   amo2_fault_tec_open		, //4
+  amo2_fault_fet		, //5
 };
 const char* amo2_fault_string[] = {
-  "TEC Off"				,
+  "TEC Off"			,
   "Sensor Out of Range"		,
-  "TEC Current Out of Range"    ,
+  "TEC Current Fault"    	,
   "TEC Polarity Reversed"	,
   "TEC Not Connected"		,
+  "Output Fault"		,
 };
 uint8_t amo2_fault = amo2_fault_none;
 uint8_t amo2_fault_prev = amo2_fault_none;
@@ -183,6 +185,7 @@ double amo2_VPP_read_degC ();
 const float amo2_fet_cnts_to_mv = 3.476743;
 const float amo2_fet_cnts_to_ma = 40.1657;
 const uint32_t amo2_fet_vtec_mv = 5000;
+const uint32_t amo2_fet_mw_max = 10000;
 uint32_t amo2_fet_mv;
 uint32_t amo2_fet_ma;
 uint32_t amo2_fet_mw;
@@ -349,6 +352,14 @@ void amo2_fault_check ()
   else if(amo2_fet_ma>((amo2_vilm_amps+1)*1000)) {
     amo2_fault = amo2_fault_tec;
     amo2_fault_prev = amo2_fault_tec;
+    if ( amo2_tec_state_latched) {
+      amo2_VILM_set_ma(0);
+      amo2_tec_state = false;
+    }
+  }
+  else if(amo2_fet_mw>amo2_fet_mw_max) {
+    amo2_fault = amo2_fault_fet;
+    amo2_fault_prev = amo2_fault_fet;
     if ( amo2_tec_state_latched) {
       amo2_VILM_set_ma(0);
       amo2_tec_state = false;
