@@ -69,27 +69,32 @@ extern "C" {
 #define SPI_FLEX_01_PWR_PORT  	PORTG
 
 // SPI_FLEX_02
-#define SPI_FLEX_AMO2_VT      0x02
+#define SPI_FLEX_AMO3_VOUT      0x02
 
-#define SPI_FLEX_02_CLK		PK1
-#define SPI_FLEX_02_CLK_PIN   	PINK
-#define SPI_FLEX_02_CLK_DDR   	DDRK
-#define SPI_FLEX_02_CLK_PORT  	PORTK
+#define SPI_FLEX_02_CLK		PH4
+#define SPI_FLEX_02_CLK_PIN   	PINH
+#define SPI_FLEX_02_CLK_DDR   	DDRH
+#define SPI_FLEX_02_CLK_PORT  	PORTH
 
-#define SPI_FLEX_02_SDO		PK3
-#define SPI_FLEX_02_SDO_PIN   	PINK
-#define SPI_FLEX_02_SDO_DDR   	DDRK
-#define SPI_FLEX_02_SDO_PORT  	PORTK
+#define SPI_FLEX_02_SDO		PH5
+#define SPI_FLEX_02_SDO_PIN   	PINH
+#define SPI_FLEX_02_SDO_DDR   	DDRH
+#define SPI_FLEX_02_SDO_PORT  	PORTH
 
-#define SPI_FLEX_02_nCS		PK7
-#define SPI_FLEX_02_nCS_PIN   	PINK
-#define SPI_FLEX_02_nCS_DDR   	DDRK
-#define SPI_FLEX_02_nCS_PORT  	PORTK
+#define SPI_FLEX_02_nCS		PH3
+#define SPI_FLEX_02_nCS_PIN   	PINH
+#define SPI_FLEX_02_nCS_DDR   	DDRH
+#define SPI_FLEX_02_nCS_PORT  	PORTH
 
-#define SPI_FLEX_02_DIS		PA3
-#define SPI_FLEX_02_DIS_PIN   	PINA
-#define SPI_FLEX_02_DIS_DDR   	DDRA
-#define SPI_FLEX_02_DIS_PORT  	PORTA
+#define SPI_FLEX_02_DIS		PH7
+#define SPI_FLEX_02_DIS_PIN   	PINH
+#define SPI_FLEX_02_DIS_DDR   	DDRH
+#define SPI_FLEX_02_DIS_PORT  	PORTH
+
+#define SPI_FLEX_02_nLDAC	PH6
+#define SPI_FLEX_02_nLDAC_PIN  	PINH
+#define SPI_FLEX_02_nLDAC_DDR  	DDRH
+#define SPI_FLEX_02_nLDAC_PORT 	PORTH
 
 // SPI_FLEX_03
 #define SPI_FLEX_AMO2_VILM	0x03
@@ -165,6 +170,7 @@ extern "C" {
 #define SPI_FLEX_05_DIS_DDR   	DDRA
 #define SPI_FLEX_05_DIS_PORT  	PORTA
   
+/* USES SAME PINS AS AMO3 VOUT
 // SPI_FLEX_06
 #define SPI_FLEX_AMO2_FET	0x06
 
@@ -187,6 +193,7 @@ extern "C" {
 #define SPI_FLEX_06_nCS_PIN   	PINH
 #define SPI_FLEX_06_nCS_DDR   	DDRH
 #define SPI_FLEX_06_nCS_PORT  	PORTH
+*/
   
 // setup
 void spi_flex_init(const unsigned char spi_n);

@@ -32,11 +32,12 @@
 
 #include "CleO.hpp"
 #include "ad5541.hpp"
+#include "ad5544.hpp"
 #include "ad5621.hpp"
 #include "ad5290.hpp"
 #include "max11100.hpp"
 #include "ad7921.hpp"
-#include "amo2.hpp"
+#include "amo3.hpp"
 
 int main(void) {
   // ////////////////////////////////////////////////////////////////////////
@@ -49,8 +50,8 @@ int main(void) {
   // initialize serial console and redirect printf(), getchar() etc. to it
   serial_console_init();  // enables interrupt!
   
-  // AMO2
-  amo2_init();
+  // AMO3
+  amo3_init();
 
   // ////////////////////////////////////////////////////////////////////////
   // boot indicator
@@ -81,9 +82,10 @@ int main(void) {
   for (;;) {
     if (counter%90==0) {
       //amo2_VPP_read_uv();
-      amo2_VPP_read_degC();
-      amo2_FET_read_mw();
-      amo2_fault_check();
+      //amo2_VPP_read_degC();
+      //fet has pin conflicts:
+      //amo2_FET_read_mw();
+      amo3_fault_check();
       no_op=0;
     }
     if (counter%100==0) {
@@ -93,7 +95,7 @@ int main(void) {
       no_op=0;
     }
     if (counter%250==0) {
-      amo2_hardware_update();
+      amo3_hardware_update();
       no_op=0;
     }
     if (no_op) _delay_ms(1);
