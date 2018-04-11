@@ -47,7 +47,24 @@ const char firmware_id[] = "0.0.0";
 #define AMO3_PWR_nOK_DDR   	DDRH
 #define AMO3_PWR_nOK_PORT  	PORTH
 
-// internal variables (amo3)
+// Fault Check
+bool debugging_power = false;
+bool amo3_tec_state = true;
+bool amo3_tec_state_latched = true; 
+
+enum {
+  amo3_fault_none	, //0
+  amo3_fault_pwr	, //1
+};
+const char* amo3_fault_string[] = {
+  "No faults."		,
+  "nPower pin High."	
+};
+
+uint8_t amo3_fault = amo3_fault_none;
+uint8_t amo3_fault_prev = amo3_fault_none;
+
+// Internal Variables (amo3)
 double amo3_voltage_out[4] = {0.0, 0.0, 0.0, 0.0}; 
 bool enable[4] = {false, false, false, false};
 
@@ -61,6 +78,7 @@ const float amo3_vout_mv_to_cnts[4] = {0.4369,0.4369,0.4369,0.4369};
 uint16_t amo3_vout_cnts_max = 65535;
 uint32_t amo3_vout_mv = 123456;
 uint32_t amo3_mv_latched[4] = {0,0,0,0};
+float max_V = 150.000;
 AD5544   amo3_VOUT_dac(SPI_FLEX_AMO3_VOUT);
 
 void amo3_VOUT_init ();
@@ -172,33 +190,64 @@ void amo3_init ()
 
 void amo3_fault_check ()
 {
-  // TODO: THIS FUNCTION IS EMPTY!
+  // NOTE: there is additional fault checking code in the hardware_update() function
+  if (AMO6_CLEO_nPWR || debugging_power){
+    if(amo3_fault != amo3_fault_pwr){
+      amo3_fault = amo3_fault_pwr;
+      if (amo3_tec_state){
+        int i;
+        //disable all output
+        for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); }
+	for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
+        for (i = 0; i<4; ++i){ enable[i] = false; }
+        amo3_tec_state = false;
+      }
+    }
+  }
+  else {
+    if (amo3_fault != amo3_fault_none){
+      amo3_fault_prev = amo3_fault;
+      amo3_fault = amo3_fault_none;
+      // NOTE, if the AMO6_CLEO_nPWR fault is turned to logiv low after being in logic high, we allow user to alter voltages again 
+      if (!amo3_tec_state){
+        amo3_tec_state = true;
+      }
+    }
+  }
 }
 
 void amo3_hardware_update ()
 {
   // sends voltage values
   uint8_t i;
-  for (i=0;i<4;++i){
-/*
-    if (enable[i]){
-      val = amo3_voltage_out[i]*1000.0;
+  if (amo3_tec_state && (amo3_fault==amo3_fault_none)){ ;
+    for (i=0;i<4;++i){
+      uint32_t val = (enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
+      if (val != amo3_mv_latched[i]){
+        amo3_mv_latched[i] = val;
+        amo3_VOUT_set_mv(val, i);
+      }
     }
-    else {
-      val = 0;
+  }
+  // fault handling
+  if(amo3_tec_state != amo3_tec_state_latched) { //tec on/off
+    if (amo3_tec_state && (amo3_fault==amo3_fault_none)){ ;
+      //IF FAULT -> NO FAULT
     }
-*/
-    uint32_t val = (enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
-    if (val != amo3_mv_latched[i]){
-      amo3_mv_latched[i] = val;
-      amo3_VOUT_set_mv(val, i);
+    else{ ;
+      //IF NO FAULT -> FAULT
     }
+    amo3_tec_state_latched = amo3_tec_state;
   }
 }
 
 void amo3_VOUT_init ()
 {
+  uint8_t i;
   // TODO: THIS FUNCTION IS EMPTY!
+  for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); };
+  for (i = 0; i<4; ++i){ enable[i] = false; }
+  amo3_tec_state = true;
 
   // testing
   //amo3_VOUT_dac.setCounts(0, test_output); //test offset
@@ -293,7 +342,8 @@ void amo6_buttons_update ()
   float tmp;
   bool sw1_now = (PINB>>PB6) & 0x01;
   bool sw2_now = (PINB>>PB5) & 0x01;
-  float max_V = 150.000;
+  if (!amo3_tec_state)
+    return;
   
   for (tag=0;tag<AMO6_SCREEN_TAGS-1;tag++) { //find active screen tag
     if (amo6_screen_select[tag]==1) break;
@@ -614,7 +664,55 @@ void amo6_serial_parse ()
       printf("Firmware ID : %s\n", firmware_id);
     }
   }
+  else if(strcmp(token[0],"vsel.w")==0)
+  {
+    if(i==3){
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
+      _delay_ms(5);
+      int channel = atoi(token[1]);
+      int tmp = atoi(token[2]);
+      if (channel <= 4 && channel >=1)
+      {
+        if (tmp == 0){
+          enable[channel-1]=false;
+	  printf("Disabled output %d\n", channel);
+        }
+        else if (tmp == 1){
+          enable[channel-1]=true;
+	  printf("Enabled output %d\n", channel);
+        }
+      }
+    }
+  }
+  else if(strcmp(token[0],"vout.w")==0)
+  {
+    if(i==3){
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
+      _delay_ms(5);
+      int channel = atoi(token[1]);
+      float tmp = atof(token[2]);
+      if (tmp > max_V) tmp = max_V; //tagasdf
+      if (tmp < 0) tmp = 0;
+      if (channel <= 4 && channel >=1)
+        amo3_voltage_out[channel-1] = tmp;
+      printf("Voltage output: %f\n", amo3_voltage_out[channel-1]);
+    }
+  }
+  else if(strcmp(token[0],"help")==0)
+  {
+    printf("Commands:\nvout.w [channel] [voltage]\nvsel.w[ channel] [enable]\nid?\n");
+  }
+  else if(strcmp(token[0],"pwr.w")==0)
+  {
+    printf("PWR PIN: %d\n",AMO6_CLEO_nPWR);
+  }
+  else if(strcmp(token[0],"trigger_fault.w")==0)
+  {
+    debugging_power = !debugging_power;
+    printf("Fault triggered: %d\n",!amo3_tec_state);
+  }
   else {
+    printf("Command not recognized.\nType 'help' for list of commands.\n");
   }
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
 }
@@ -700,7 +798,8 @@ void amo6_screen_draw ()
 
   char text_buf[50];
 
-  //00
+  // Draw the Voltage boxes
+  // Draw the Voltage strings
   CleO.Tag(amo6_screen_voltage_output1);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output1] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW1_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW1_H-AMO6_SCREEN_OFFSET);
@@ -708,16 +807,7 @@ void amo6_screen_draw ()
   CleO.StringExt(FONT_SANS_6, 200, AMO6_SCREEN_ROW1_Y, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 220, AMO6_SCREEN_ROW1_Y+8, amo6_screen_text_color, MM, 0, 0, "V");
   CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW1_Y-30, amo6_screen_text_color, MM, 0, 0, "1");
-  
-  //01
-  CleO.Tag(amo6_screen_enable_output1);
-  CleO.RectangleColor(enable[0] ? MY_GREEN : MY_RED);
-  CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
-  strcpy(text_buf, enable[0]? "ON" : "OFF");
-  CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "1");
 
-  //02
   CleO.Tag(amo6_screen_voltage_output3);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output3] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW3_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW3_H-3*AMO6_SCREEN_OFFSET);
@@ -725,13 +815,7 @@ void amo6_screen_draw ()
   CleO.StringExt(FONT_SANS_6, 200, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 220, AMO6_SCREEN_ROW3_Y+8, amo6_screen_text_color, MM, 0, 0, "V");
   CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW3_Y-30, amo6_screen_text_color, MM, 0, 0, "3");
-  
-  CleO.Tag(amo6_screen_enable_output3);
-  CleO.RectangleColor(enable[2] ? MY_GREEN : MY_RED);
-  CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
-  strcpy(text_buf, enable[2]? "ON" : "OFF");
-  CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "3");
+
 
   CleO.Tag(amo6_screen_voltage_output2);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output2] ? CLEO_SELECT : MY_WHITE);
@@ -740,13 +824,7 @@ void amo6_screen_draw ()
   CleO.StringExt(FONT_SANS_6, 440, AMO6_SCREEN_ROW1_Y, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 460, AMO6_SCREEN_ROW1_Y+8, amo6_screen_text_color, MM, 0, 0, "V");
   CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW1_Y-30, amo6_screen_text_color, MM, 0, 0, "2");
-  
-  CleO.Tag(amo6_screen_enable_output2);
-  CleO.RectangleColor(enable[1] ? MY_GREEN : MY_RED);
-  CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
-  strcpy(text_buf, enable[1]? "ON" : "OFF");
-  CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "2");
+
 
   CleO.Tag(amo6_screen_voltage_output4);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output4] ? CLEO_SELECT : MY_WHITE);
@@ -755,14 +833,62 @@ void amo6_screen_draw ()
   CleO.StringExt(FONT_SANS_6, 440, AMO6_SCREEN_ROW3_Y, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 460, AMO6_SCREEN_ROW3_Y+8, amo6_screen_text_color, MM, 0, 0, "V");
   CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW3_Y-30, amo6_screen_text_color, MM, 0, 0, "4");
-  
-  CleO.Tag(amo6_screen_enable_output4);
-  CleO.RectangleColor(enable[3] ? MY_GREEN : MY_RED);
-  CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
-  strcpy(text_buf, enable[3]? "ON" : "OFF");
-  CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "4");
 
+  // Draw the ON/OFF boxes
+
+  if (amo3_fault == amo3_fault_none){
+    // Draw the ON/OFF strings
+    CleO.Tag(amo6_screen_enable_output1);
+    CleO.RectangleColor(enable[0] ? MY_GREEN : MY_RED);
+    CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
+    strcpy(text_buf, enable[0]? "ON" : "OFF");
+    CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
+    CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "1");
+  
+    CleO.Tag(amo6_screen_enable_output3);
+    CleO.RectangleColor(enable[2] ? MY_GREEN : MY_RED);
+    CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
+    strcpy(text_buf, enable[2]? "ON" : "OFF");
+    CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
+    CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "3");
+
+    CleO.Tag(amo6_screen_enable_output2);
+    CleO.RectangleColor(enable[1] ? MY_GREEN : MY_RED);
+    CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
+    strcpy(text_buf, enable[1]? "ON" : "OFF");
+    CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
+    CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "2");
+  
+    CleO.Tag(amo6_screen_enable_output4);
+    CleO.RectangleColor(enable[3] ? MY_GREEN : MY_RED);
+    CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
+    strcpy(text_buf, enable[3]? "ON" : "OFF");
+    CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
+    CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "4");
+  }
+  else{
+    // Draw the Power Fault Strings
+    CleO.RectangleColor(MY_RED);
+    CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW2_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
+    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW2_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
+    CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "1");
+
+    CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW4_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
+    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW4_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
+    CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "3");
+
+    CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW2_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
+    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW2_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
+    CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "2");
+
+    CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW4_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
+    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW4_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
+    CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "4");
+  }
 
   // Update Screen
   CleO.Show();
@@ -799,6 +925,8 @@ void amo6_screen_shortPress (bool *press_detected)
 void amo6_screen_processShortPress () {
   int i;
   bool sel;
+  if(!amo3_tec_state)
+    return;
   
   switch (amo6_screen_current_tag) {
     case amo6_screen_voltage_output1	:
