@@ -9,7 +9,10 @@
  *		 1 - top right
  *		 2 - bottom left
  *		 3 - bottom right
- * added //(+) //(end +) comments before and after all new code
+ * Updates:
+ * working serial commands
+ * PWR handling (not interrupt)
+ * working EEPROM
 */ 
 
 #ifndef AMO3_H
@@ -18,6 +21,9 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+
+//for EEPROM memory:
+#include <avr/eeprom.h>
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Tracking
@@ -66,7 +72,7 @@ uint8_t amo3_fault_prev = amo3_fault_none;
 
 // Internal Variables (amo3)
 double amo3_voltage_out[4] = {0.0, 0.0, 0.0, 0.0}; 
-bool enable[4] = {false, false, false, false};
+bool amo3_enable[4] = {false, false, false, false};
 
 void amo3_init ();
 void amo3_fault_check ();
@@ -84,13 +90,26 @@ AD5544   amo3_VOUT_dac(SPI_FLEX_AMO3_VOUT);
 void amo3_VOUT_init ();
 void amo3_VOUT_set_mv (uint32_t val, uint32_t dac);
 
+// EEPROM save registers
+uint16_t EEMEM amo3_eeprom_vout1_mv_hi;
+uint16_t EEMEM amo3_eeprom_vout2_mv_hi;
+uint16_t EEMEM amo3_eeprom_vout3_mv_hi;
+uint16_t EEMEM amo3_eeprom_vout4_mv_hi;
+uint16_t EEMEM amo3_eeprom_vout1_mv_lo;
+uint16_t EEMEM amo3_eeprom_vout2_mv_lo;
+uint16_t EEMEM amo3_eeprom_vout3_mv_lo;
+uint16_t EEMEM amo3_eeprom_vout4_mv_lo;
+uint8_t amo3_save_flag = 0;
+
 // Buttons (AMO6)
 static int8_t amo6_encoder_val = 0;
 static bool amo6_sw1_pushed = false;
 static bool amo6_sw2_pushed = false;
-static bool count_latch [2] = {false, false};
-uint8_t hold_count [2] = {0, 0};
-const uint8_t hold_threshold = 5;
+// (+) additional variables
+static bool amo6_count_latch [2] = {false, false};
+uint8_t amo6_hold_count [2] = {0, 0};
+// NOTE: decrease hold_threshold for faster incrementing
+const uint8_t amo6_hold_threshold = 5;
 
 void amo6_buttons_init ();
 void amo6_buttons_update ();
@@ -143,6 +162,10 @@ enum {
 #define AMO6_SCREEN_TAGS 8	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
+// (+) saving functions
+void amo6_load_state();
+void amo6_save_state();
+
 int16_t amo6_screen_x, amo6_screen_y;
 int16_t amo6_screen_current_dur;
 int amo6_screen_last_dur = 0;
@@ -161,6 +184,11 @@ void amo6_screen_processShortPress ();
 //////////////////////////////////////////////////////////////////////////////////////
 // Implementation
 //////////////////////////////////////////////////////////////////////////////////////
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+
 
 //AMO3 
 void amo3_init ()
@@ -185,6 +213,8 @@ void amo3_init ()
 
   amo6_screen_init();
   amo6_buttons_init();
+  // load memory from EEPROM
+  amo6_load_state();
   _delay_ms(5000);
 }
 
@@ -199,7 +229,7 @@ void amo3_fault_check ()
         //disable all output
         for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); }
 	for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
-        for (i = 0; i<4; ++i){ enable[i] = false; }
+        for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
         amo3_tec_state = false;
       }
     }
@@ -222,12 +252,15 @@ void amo3_hardware_update ()
   uint8_t i;
   if (amo3_tec_state && (amo3_fault==amo3_fault_none)){ ;
     for (i=0;i<4;++i){
-      uint32_t val = (enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
+      uint32_t val = (amo3_enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
       if (val != amo3_mv_latched[i]){
         amo3_mv_latched[i] = val;
         amo3_VOUT_set_mv(val, i);
       }
     }
+    // we only want to display save flag for a fixed number of seconds
+    if (amo3_save_flag)
+      --amo3_save_flag;
   }
   // fault handling
   if(amo3_tec_state != amo3_tec_state_latched) { //tec on/off
@@ -244,9 +277,8 @@ void amo3_hardware_update ()
 void amo3_VOUT_init ()
 {
   uint8_t i;
-  // TODO: THIS FUNCTION IS EMPTY!
   for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); };
-  for (i = 0; i<4; ++i){ enable[i] = false; }
+  for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
   amo3_tec_state = true;
 
   // testing
@@ -348,12 +380,45 @@ void amo6_buttons_update ()
   for (tag=0;tag<AMO6_SCREEN_TAGS-1;tag++) { //find active screen tag
     if (amo6_screen_select[tag]==1) break;
   };
+
+  // (+) both buttons are pressed
+  if (amo6_sw1_pushed && amo6_sw2_pushed){
+    switch (tag) {
+      // do not do anything if something is selected
+      case amo6_screen_voltage_output1	:
+      case amo6_screen_voltage_output2	:
+      case amo6_screen_voltage_output3	:
+      case amo6_screen_voltage_output4	:
+	break;
+      // save the state is nothing is selected
+      default :
+	//display save flag for 4 loops/iterations
+	amo3_save_flag = 4;
+	// BEEP
+	AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	_delay_ms(60);
+	AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
+	// save to EEPROM
+	amo6_save_state();
+    }
+    // reset long-press variables
+    amo6_count_latch[1] = false;
+    amo6_hold_count[1] = 0;
+    amo6_count_latch[0] = false;
+    amo6_hold_count[0] = 0;
+    // set buttons to not pressed
+    amo6_sw1_pushed = false;
+    amo6_sw2_pushed = false;
+    return;
+  }
   
   // sw1 pressed
   if (amo6_sw1_pushed) {
-    count_latch[0] = true; // start counting hold time
-    if (!sw1_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
-      switch (tag) {
+    // (+) only update if other button is not pressed
+    if (!amo6_count_latch[1]){
+      amo6_count_latch[0] = true; // start counting hold time
+      if (!sw1_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
+        switch (tag) {
         case amo6_screen_voltage_output1	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
@@ -386,17 +451,25 @@ void amo6_buttons_update ()
 	  if (tmp<0) tmp=0;
 	  amo3_voltage_out[3] = tmp;
           break;
+        }
+        AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
       }
-      AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
+    }
+    else{
+      // (+) reset long-press variables
+      amo6_count_latch[1] = false;
+      amo6_hold_count[1] = 0;
     }
     amo6_sw1_pushed = false;
   }
   
   // sw2 pressed
   if (amo6_sw2_pushed) {
-    count_latch[1] = true; // start counting hold time
-    if (!sw2_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
-      switch (tag) {
+    // (+) only update if other button is not pressed
+    if (!amo6_count_latch[0]){
+      amo6_count_latch[1] = true; // start counting hold time
+      if (!sw2_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
+        switch (tag) {
         case amo6_screen_voltage_output1	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
@@ -429,17 +502,25 @@ void amo6_buttons_update ()
 	  if (tmp<0) tmp=0;
 	  amo3_voltage_out[3] = tmp;
           break;
+        }
+        AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
       }
-      AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
+    }
+    else{
+      // (+) reset long-press variables
+      amo6_count_latch[0] = false;
+      amo6_hold_count[0] = 0;
     }
     amo6_sw2_pushed = false;
   }
 
-  // sw2 held
-  if (count_latch[1]){
-    if (hold_count[1] < hold_threshold)
-      ++(hold_count[1]);
-    if (hold_count[1] >= hold_threshold){
+  // (+) sw2 held
+  if (amo6_count_latch[1]){
+    // increment hold_counter
+    if (amo6_hold_count[1] < amo6_hold_threshold)
+      ++(amo6_hold_count[1]);
+    // update values
+    if (amo6_hold_count[1] >= amo6_hold_threshold){
       switch (tag) {
         case amo6_screen_voltage_output1	:
  	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -475,19 +556,21 @@ void amo6_buttons_update ()
           break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
-      hold_count[1] = 0;
+      amo6_hold_count[1] = 0;
     }
     if (sw2_now){
-      count_latch[1] = false;
-      hold_count[1] = 0;
+      // reset long-press variables
+      amo6_count_latch[1] = false;
+      amo6_hold_count[1] = 0;
     }
   }
-
-  // sw1 held
-  if (count_latch[0]){
-    if (hold_count[0] < hold_threshold)
-      ++(hold_count[0]);
-    if (hold_count[0] >= hold_threshold){
+  // (+) sw1 held
+  if (amo6_count_latch[0]){
+    // increment hold_counter
+    if (amo6_hold_count[0] < amo6_hold_threshold)
+      ++(amo6_hold_count[0]);
+    // update values
+    if (amo6_hold_count[0] >= amo6_hold_threshold){
       switch (tag) {
         case amo6_screen_voltage_output1	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -523,11 +606,12 @@ void amo6_buttons_update ()
           break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
-      hold_count[0] = 0;
+      amo6_hold_count[0] = 0;
     }
     if (sw1_now){
-      count_latch[0] = false;
-      hold_count[0] = 0;
+      // reset long-press variables
+      amo6_count_latch[0] = false;
+      amo6_hold_count[0] = 0;
     }
   }
   
@@ -641,6 +725,54 @@ void amo6_serial_update ()
   }
 }
 
+//load voltage values from EEPROM memory
+void amo6_load_state(){
+  // retrieve top 16 bit and bottom 16 bit from memory
+  // convert top 16bit and bottom 16bit into integer
+  uint32_t val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout1_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout1_mv_lo);
+  // convert integer into float
+  amo3_voltage_out[0] = val > 150000? 150: val/1000.0;
+
+  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout2_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout2_mv_lo);
+  amo3_voltage_out[1] = val > 150000? 150: val/1000.0;
+
+  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout3_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout3_mv_lo);
+  amo3_voltage_out[2] = val > 150000? 150: val/1000.0;
+
+  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout4_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout4_mv_lo);
+  amo3_voltage_out[3] = val > 150000? 150: val/1000.0;
+}
+
+//save voltage values from EEPROM memory
+void amo6_save_state(){
+  // convert float into integer
+  uint32_t val = amo3_voltage_out[0]*1000;
+  // split integer to top 16bit and bottom 16bit
+  // save top 16bit and bottom 16bit into memory
+  uint16_t hi_word = val >> 16;
+  uint16_t lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout1_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout1_mv_lo, lo_word);
+
+  val = amo3_voltage_out[1]*1000;
+  hi_word = val >> 16;
+  lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout2_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout2_mv_lo, lo_word);
+
+  val = amo3_voltage_out[2]*1000;
+  hi_word = val >> 16;
+  lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout3_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout3_mv_lo, lo_word);
+
+  val = amo3_voltage_out[3]*1000;
+  hi_word = val >> 16;
+  lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout4_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout4_mv_lo, lo_word);
+}
+
 void amo6_serial_parse ()
 {
   char delimiters[] = " ";
@@ -664,6 +796,7 @@ void amo6_serial_parse ()
       printf("Firmware ID : %s\n", firmware_id);
     }
   }
+  // (+) enables or disables a voltage channel
   else if(strcmp(token[0],"vsel.w")==0)
   {
     if(i==3){
@@ -674,16 +807,17 @@ void amo6_serial_parse ()
       if (channel <= 4 && channel >=1)
       {
         if (tmp == 0){
-          enable[channel-1]=false;
+          amo3_enable[channel-1]=false;
 	  printf("Disabled output %d\n", channel);
         }
         else if (tmp == 1){
-          enable[channel-1]=true;
+          amo3_enable[channel-1]=true;
 	  printf("Enabled output %d\n", channel);
         }
       }
     }
   }
+  // (+) changes the voltage output value of a voltage channel
   else if(strcmp(token[0],"vout.w")==0)
   {
     if(i==3){
@@ -698,10 +832,12 @@ void amo6_serial_parse ()
       printf("Voltage output: %f\n", amo3_voltage_out[channel-1]);
     }
   }
+  // (+) displays valid serial commands
   else if(strcmp(token[0],"help")==0)
   {
     printf("Commands:\nvout.w [channel] [voltage]\nvsel.w[ channel] [enable]\nid?\n");
   }
+  //for debugging... simulating fault handling
   else if(strcmp(token[0],"pwr.w")==0)
   {
     printf("PWR PIN: %d\n",AMO6_CLEO_nPWR);
@@ -711,6 +847,7 @@ void amo6_serial_parse ()
     debugging_power = !debugging_power;
     printf("Fault triggered: %d\n",!amo3_tec_state);
   }
+  // (+) default commands
   else {
     printf("Command not recognized.\nType 'help' for list of commands.\n");
   }
@@ -836,33 +973,46 @@ void amo6_screen_draw ()
 
   // Draw the ON/OFF boxes
 
+  // (+) we write string "SAVED" if we write to EEPROM
   if (amo3_fault == amo3_fault_none){
     // Draw the ON/OFF strings
     CleO.Tag(amo6_screen_enable_output1);
-    CleO.RectangleColor(enable[0] ? MY_GREEN : MY_RED);
+    CleO.RectangleColor(amo3_enable[0] ? MY_GREEN : MY_RED);
     CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
-    strcpy(text_buf, enable[0]? "ON" : "OFF");
+    if (!amo3_save_flag)
+      strcpy(text_buf, amo3_enable[0]? "ON" : "OFF");
+    else
+      strcpy(text_buf, "SAVED");
     CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "1");
   
     CleO.Tag(amo6_screen_enable_output3);
-    CleO.RectangleColor(enable[2] ? MY_GREEN : MY_RED);
+    CleO.RectangleColor(amo3_enable[2] ? MY_GREEN : MY_RED);
     CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
-    strcpy(text_buf, enable[2]? "ON" : "OFF");
+    if (!amo3_save_flag)
+      strcpy(text_buf, amo3_enable[2]? "ON" : "OFF");
+    else
+      strcpy(text_buf, "SAVED");
     CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "3");
 
     CleO.Tag(amo6_screen_enable_output2);
-    CleO.RectangleColor(enable[1] ? MY_GREEN : MY_RED);
+    CleO.RectangleColor(amo3_enable[1] ? MY_GREEN : MY_RED);
     CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
-    strcpy(text_buf, enable[1]? "ON" : "OFF");
+    if (!amo3_save_flag)
+      strcpy(text_buf, amo3_enable[1]? "ON" : "OFF");
+    else
+      strcpy(text_buf, "SAVED");
     CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "2");
   
     CleO.Tag(amo6_screen_enable_output4);
-    CleO.RectangleColor(enable[3] ? MY_GREEN : MY_RED);
+    CleO.RectangleColor(amo3_enable[3] ? MY_GREEN : MY_RED);
     CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
-    strcpy(text_buf, enable[3]? "ON" : "OFF");
+    if (!amo3_save_flag)
+      strcpy(text_buf, amo3_enable[3]? "ON" : "OFF");
+    else
+      strcpy(text_buf, "SAVED");
     CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "4");
   }
@@ -939,7 +1089,7 @@ void amo6_screen_processShortPress () {
     case amo6_screen_enable_output1	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
-      enable[0] = !enable[0];
+      amo3_enable[0] = !amo3_enable[0];
       for(i=0;i<amo6_screen_voltage_output1;i++) amo6_screen_select[i]=0;
       for(i=amo6_screen_voltage_output1+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
       break;
@@ -953,7 +1103,7 @@ void amo6_screen_processShortPress () {
     case amo6_screen_enable_output2	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
-      enable[1] = !enable[1];
+      amo3_enable[1] = !amo3_enable[1];
       for(i=0;i<amo6_screen_voltage_output2;i++) amo6_screen_select[i]=0;
       for(i=amo6_screen_voltage_output2+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
       break;
@@ -967,7 +1117,7 @@ void amo6_screen_processShortPress () {
     case amo6_screen_enable_output3	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
-      enable[2] = !enable[2];
+      amo3_enable[2] = !amo3_enable[2];
       for(i=0;i<amo6_screen_voltage_output3;i++) amo6_screen_select[i]=0;
       for(i=amo6_screen_voltage_output3+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
       break;
@@ -981,7 +1131,7 @@ void amo6_screen_processShortPress () {
     case amo6_screen_enable_output4	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
-      enable[3] = !enable[3];
+      amo3_enable[3] = !amo3_enable[3];
       for(i=0;i<amo6_screen_voltage_output4;i++) amo6_screen_select[i]=0;
       for(i=amo6_screen_voltage_output4+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
       break;
