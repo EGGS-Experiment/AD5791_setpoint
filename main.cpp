@@ -82,10 +82,6 @@ int main(void) {
   bool no_op=1;
   for (;;) {
     if (counter%90==0) {
-      //amo2_VPP_read_uv();
-      //amo2_VPP_read_degC();
-      //fet has pin conflicts:
-      //amo2_FET_read_mw();
       amo3_fault_check();
       no_op=0;
     }

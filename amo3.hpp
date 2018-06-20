@@ -1,28 +1,9 @@
-/* Changes:
- * user interface screen is now a 4 output Voltage Settings
- * hardware startup stage only loads screen (no PID_init and such)
- * removed PID/Temp Control/etc. tags from amo_screen_select array
- * outputs and enable information are stored in the following arrays: 
- *	amo2_voltage [4]
- *	enable [4]
- *	Indices: 0 - top left
- *		 1 - top right
- *		 2 - bottom left
- *		 3 - bottom right
- * Updates:
- * working serial commands
- * PWR handling (not interrupt)
- * working EEPROM
-*/ 
-
 #ifndef AMO3_H
 #define AMO3_H 1
 
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-
-//for EEPROM memory:
 #include <avr/eeprom.h>
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -30,8 +11,8 @@
 //////////////////////////////////////////////////////////////////////////////////////
 const char device_name[] = "Piezo Controller";
 const char device_id[]   = "AMO3";
-const char hardware_id[] = "0.0.0";
-const char firmware_id[] = "0.0.0";
+const char hardware_id[] = "0.1.2";
+const char firmware_id[] = "0.0.1";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -53,76 +34,70 @@ const char firmware_id[] = "0.0.0";
 #define AMO3_PWR_nOK_DDR   	DDRH
 #define AMO3_PWR_nOK_PORT  	PORTH
 
-// Fault Check
-bool debugging_power = false;
-bool amo3_tec_state = true;
-bool amo3_tec_state_latched = true; 
-
+//  AMO3
+bool    debugging_power         = false;
+bool    amo3_tec_state          = true;
+bool    amo3_tec_state_latched  = true; 
+double  amo3_voltage_out  [4]   = {0.0, 0.0, 0.0, 0.0}; 
+bool    amo3_enable  [4]        = {false, false, false, false};
 enum {
   amo3_fault_none	, //0
   amo3_fault_pwr	, //1
 };
 const char* amo3_fault_string[] = {
-  "No faults."		,
-  "nPower pin High."	
+  "No faults"		,
+  "nPower pin High"	
 };
+uint8_t  amo3_fault       = amo3_fault_none;
+uint8_t  amo3_fault_prev  = amo3_fault_none;
 
-uint8_t amo3_fault = amo3_fault_none;
-uint8_t amo3_fault_prev = amo3_fault_none;
+uint16_t  EEMEM amo3_eeprom_vout1_mv_hi;
+uint16_t  EEMEM amo3_eeprom_vout2_mv_hi;
+uint16_t  EEMEM amo3_eeprom_vout3_mv_hi;
+uint16_t  EEMEM amo3_eeprom_vout4_mv_hi;
+uint16_t  EEMEM amo3_eeprom_vout1_mv_lo;
+uint16_t  EEMEM amo3_eeprom_vout2_mv_lo;
+uint16_t  EEMEM amo3_eeprom_vout3_mv_lo;
+uint16_t  EEMEM amo3_eeprom_vout4_mv_lo;
+uint8_t   amo3_save_flag  = 0;
 
-// Internal Variables (amo3)
-double amo3_voltage_out[4] = {0.0, 0.0, 0.0, 0.0}; 
-bool amo3_enable[4] = {false, false, false, false};
+void  amo3_init             ();
+void  amo3_load_state       ();
+void  amo3_save_state       ();
+void  amo3_fault_check      ();
+void  amo3_hardware_update  ();
 
-void amo3_init ();
-void amo3_fault_check ();
-void amo3_hardware_update ();
+//  VOUT
+const float  amo3_vout_mv_to_cnts  [4]  = {0.4369,0.4369,0.4369,0.4369};
+uint16_t     amo3_vout_cnts_max         = 65535;
+uint32_t     amo3_vout_mv               = 123456;
+uint32_t     amo3_mv_latched[4]         = {0,0,0,0};
+float        max_V                      = 150.000;
+AD5544       amo3_VOUT_dac  (SPI_FLEX_AMO3_VOUT);
 
-// VOUT
-// PREVIOUS: const float amo3_vout_mv_to_cnts = 0.0131072;
-const float amo3_vout_mv_to_cnts[4] = {0.4369,0.4369,0.4369,0.4369};
-uint16_t amo3_vout_cnts_max = 65535;
-uint32_t amo3_vout_mv = 123456;
-uint32_t amo3_mv_latched[4] = {0,0,0,0};
-float max_V = 150.000;
-AD5544   amo3_VOUT_dac(SPI_FLEX_AMO3_VOUT);
+void  amo3_VOUT_init    ();
+void  amo3_VOUT_set_mv  (uint32_t val, uint32_t dac);
 
-void amo3_VOUT_init ();
-void amo3_VOUT_set_mv (uint32_t val, uint32_t dac);
+//  Buttons (AMO6)
+static int8_t  amo6_encoder_val       = 0;
+static bool    amo6_sw1_pushed        = false;
+static bool    amo6_sw2_pushed        = false;
+static bool    amo6_count_latch  [2]  = {false, false};
+uint8_t        amo6_hold_count  [2]   = {0, 0};
+const uint8_t  amo6_hold_threshold    = 7;  //decrease hold_threshold for faster incrementing
 
-// EEPROM save registers
-uint16_t EEMEM amo3_eeprom_vout1_mv_hi;
-uint16_t EEMEM amo3_eeprom_vout2_mv_hi;
-uint16_t EEMEM amo3_eeprom_vout3_mv_hi;
-uint16_t EEMEM amo3_eeprom_vout4_mv_hi;
-uint16_t EEMEM amo3_eeprom_vout1_mv_lo;
-uint16_t EEMEM amo3_eeprom_vout2_mv_lo;
-uint16_t EEMEM amo3_eeprom_vout3_mv_lo;
-uint16_t EEMEM amo3_eeprom_vout4_mv_lo;
-uint8_t amo3_save_flag = 0;
+void  amo6_buttons_init    ();
+void  amo6_buttons_update  ();
 
-// Buttons (AMO6)
-static int8_t amo6_encoder_val = 0;
-static bool amo6_sw1_pushed = false;
-static bool amo6_sw2_pushed = false;
-// (+) additional variables
-static bool amo6_count_latch [2] = {false, false};
-uint8_t amo6_hold_count [2] = {0, 0};
-// NOTE: decrease hold_threshold for faster incrementing
-const uint8_t amo6_hold_threshold = 5;
+//  Serial (AMO6)
+const int  amo6_serial_buffer_size  = 100;
+char       amo6_serial_buffer  [amo6_serial_buffer_size+1];
+char       amo6_serial_string  [amo6_serial_buffer_size+1];
 
-void amo6_buttons_init ();
-void amo6_buttons_update ();
+void  amo6_serial_update  ();
+void  amo6_serial_parse   ();
 
-// Serial (AMO6)
-const int amo6_serial_buffer_size = 100;
-char amo6_serial_buffer[amo6_serial_buffer_size+1];
-char amo6_serial_string[amo6_serial_buffer_size+1];
-
-void amo6_serial_update ();
-void amo6_serial_parse ();
-
-// Screen (AMO6)
+//  Screen (AMO6)
 #define AMO6_CLEO_nPWR		PG0
 #define AMO6_CLEO_nPWR_DDR	DDRG
 #define AMO6_CLEO_nPWR_PORT	PORTG
@@ -162,24 +137,20 @@ enum {
 #define AMO6_SCREEN_TAGS 8	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
-// (+) saving functions
-void amo6_load_state();
-void amo6_save_state();
+int16_t  amo6_screen_x  , amo6_screen_y  ;
+int16_t  amo6_screen_current_dur  ;
+int      amo6_screen_last_dur              = 0;
+int16_t  amo6_screen_current_tag  ;
+bool     amo6_screen_short_press_detected  = 0;
 
-int16_t amo6_screen_x, amo6_screen_y;
-int16_t amo6_screen_current_dur;
-int amo6_screen_last_dur = 0;
-int16_t amo6_screen_current_tag;
-bool amo6_screen_short_press_detected = 0;
-
-void amo6_screen_debug ();
-void amo6_screen_init ();
-void amo6_screen_update ();
-void amo6_screen_draw ();
-void amo6_screen_touch ();
-void amo6_screen_processButtons ();
-void amo6_screen_shortPress (bool *press_detected);
-void amo6_screen_processShortPress ();
+void  amo6_screen_debug              ();
+void  amo6_screen_init               ();
+void  amo6_screen_update             ();
+void  amo6_screen_draw               ();
+void  amo6_screen_touch              ();
+void  amo6_screen_processButtons     ();
+void  amo6_screen_shortPress         (bool *press_detected);
+void  amo6_screen_processShortPress  ();
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Implementation
@@ -189,8 +160,7 @@ void amo6_screen_processShortPress ();
 #include <stdint.h>
 #include <stdlib.h>
 
-
-//AMO3 
+// AMO3 
 void amo3_init ()
 {
   // hardware i/o config
@@ -209,13 +179,60 @@ void amo3_init ()
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
   
   // hardware init
-  amo3_VOUT_init();
-
+  amo3_VOUT_init(); //first call doesn't work
   amo6_screen_init();
   amo6_buttons_init();
-  // load memory from EEPROM
-  amo6_load_state();
+  amo3_load_state();
+  amo3_VOUT_init(); //need this second call to reset properly
   _delay_ms(5000);
+}
+
+void amo3_load_state ()
+{
+  // retrieve top 16 bit and bottom 16 bit from memory
+  // convert top 16bit and bottom 16bit into integer
+  uint32_t val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout1_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout1_mv_lo);
+  // convert integer into float
+  amo3_voltage_out[0] = val > 150000? 150: val/1000.0;
+
+  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout2_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout2_mv_lo);
+  amo3_voltage_out[1] = val > 150000? 150: val/1000.0;
+
+  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout3_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout3_mv_lo);
+  amo3_voltage_out[2] = val > 150000? 150: val/1000.0;
+
+  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout4_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout4_mv_lo);
+  amo3_voltage_out[3] = val > 150000? 150: val/1000.0;
+}
+
+void amo3_save_state ()
+{
+  // convert float into integer
+  uint32_t val = amo3_voltage_out[0]*1000;
+  // split integer to top 16bit and bottom 16bit
+  // save top 16bit and bottom 16bit into memory
+  uint16_t hi_word = val >> 16;
+  uint16_t lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout1_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout1_mv_lo, lo_word);
+
+  val = amo3_voltage_out[1]*1000;
+  hi_word = val >> 16;
+  lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout2_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout2_mv_lo, lo_word);
+
+  val = amo3_voltage_out[2]*1000;
+  hi_word = val >> 16;
+  lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout3_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout3_mv_lo, lo_word);
+
+  val = amo3_voltage_out[3]*1000;
+  hi_word = val >> 16;
+  lo_word = val & 0xFFFF;
+  eeprom_update_word(&amo3_eeprom_vout4_mv_hi, hi_word);
+  eeprom_update_word(&amo3_eeprom_vout4_mv_lo, lo_word);
 }
 
 void amo3_fault_check ()
@@ -250,7 +267,7 @@ void amo3_hardware_update ()
 {
   // sends voltage values
   uint8_t i;
-  if (amo3_tec_state && (amo3_fault==amo3_fault_none)){ ;
+  if (amo3_tec_state && (amo3_fault==amo3_fault_none)) { ;
     for (i=0;i<4;++i){
       uint32_t val = (amo3_enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
       if (val != amo3_mv_latched[i]){
@@ -295,7 +312,7 @@ void amo3_VOUT_set_mv (uint32_t val, uint32_t dac)
   amo3_VOUT_dac.setCounts(val, dac);
 }
 
-//Buttons (AMO6)
+// Buttons (AMO6)
 void amo6_buttons_init ()
 {
   // ENC_A
@@ -399,7 +416,7 @@ void amo6_buttons_update ()
 	_delay_ms(60);
 	AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
 	// save to EEPROM
-	amo6_save_state();
+	amo3_save_state();
     }
     // reset long-press variables
     amo6_count_latch[1] = false;
@@ -683,7 +700,7 @@ void amo6_buttons_update ()
   tag_old = tag;
 }
 
-//Serial (AMO6)
+// Serial (AMO6)
 void amo6_serial_update ()
 {
   char getchar;
@@ -725,54 +742,6 @@ void amo6_serial_update ()
   }
 }
 
-//load voltage values from EEPROM memory
-void amo6_load_state(){
-  // retrieve top 16 bit and bottom 16 bit from memory
-  // convert top 16bit and bottom 16bit into integer
-  uint32_t val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout1_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout1_mv_lo);
-  // convert integer into float
-  amo3_voltage_out[0] = val > 150000? 150: val/1000.0;
-
-  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout2_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout2_mv_lo);
-  amo3_voltage_out[1] = val > 150000? 150: val/1000.0;
-
-  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout3_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout3_mv_lo);
-  amo3_voltage_out[2] = val > 150000? 150: val/1000.0;
-
-  val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout4_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout4_mv_lo);
-  amo3_voltage_out[3] = val > 150000? 150: val/1000.0;
-}
-
-//save voltage values from EEPROM memory
-void amo6_save_state(){
-  // convert float into integer
-  uint32_t val = amo3_voltage_out[0]*1000;
-  // split integer to top 16bit and bottom 16bit
-  // save top 16bit and bottom 16bit into memory
-  uint16_t hi_word = val >> 16;
-  uint16_t lo_word = val & 0xFFFF;
-  eeprom_update_word(&amo3_eeprom_vout1_mv_hi, hi_word);
-  eeprom_update_word(&amo3_eeprom_vout1_mv_lo, lo_word);
-
-  val = amo3_voltage_out[1]*1000;
-  hi_word = val >> 16;
-  lo_word = val & 0xFFFF;
-  eeprom_update_word(&amo3_eeprom_vout2_mv_hi, hi_word);
-  eeprom_update_word(&amo3_eeprom_vout2_mv_lo, lo_word);
-
-  val = amo3_voltage_out[2]*1000;
-  hi_word = val >> 16;
-  lo_word = val & 0xFFFF;
-  eeprom_update_word(&amo3_eeprom_vout3_mv_hi, hi_word);
-  eeprom_update_word(&amo3_eeprom_vout3_mv_lo, lo_word);
-
-  val = amo3_voltage_out[3]*1000;
-  hi_word = val >> 16;
-  lo_word = val & 0xFFFF;
-  eeprom_update_word(&amo3_eeprom_vout4_mv_hi, hi_word);
-  eeprom_update_word(&amo3_eeprom_vout4_mv_lo, lo_word);
-}
-
 void amo6_serial_parse ()
 {
   char delimiters[] = " ";
@@ -788,38 +757,7 @@ void amo6_serial_parse ()
     i++;
   }
   
-  if(strcmp(token[0],"id?")==0) {
-    if(i==1) {
-      printf("%s\n", device_name);
-      printf("Device ID : %s\n", device_id);
-      printf("Hardware ID : %s\n", hardware_id);
-      printf("Firmware ID : %s\n", firmware_id);
-    }
-  }
-  // (+) enables or disables a voltage channel
-  else if(strcmp(token[0],"vsel.w")==0)
-  {
-    if(i==3){
-      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
-      _delay_ms(5);
-      int channel = atoi(token[1]);
-      int tmp = atoi(token[2]);
-      if (channel <= 4 && channel >=1)
-      {
-        if (tmp == 0){
-          amo3_enable[channel-1]=false;
-	  printf("Disabled output %d\n", channel);
-        }
-        else if (tmp == 1){
-          amo3_enable[channel-1]=true;
-	  printf("Enabled output %d\n", channel);
-        }
-      }
-    }
-  }
-  // (+) changes the voltage output value of a voltage channel
-  else if(strcmp(token[0],"vout.w")==0)
-  {
+  if(strcmp(token[0],"vout.w")==0) {
     if(i==3){
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
       _delay_ms(5);
@@ -829,25 +767,47 @@ void amo6_serial_parse ()
       if (tmp < 0) tmp = 0;
       if (channel <= 4 && channel >=1)
         amo3_voltage_out[channel-1] = tmp;
-      printf("Voltage output: %f\n", amo3_voltage_out[channel-1]);
+      printf("vout.w : set output #%d to %0.3f\n", channel, amo3_voltage_out[channel-1]);
     }
   }
-  // (+) displays valid serial commands
-  else if(strcmp(token[0],"help")==0)
-  {
-    printf("Commands:\nvout.w [channel] [voltage]\nvsel.w[ channel] [enable]\nid?\n");
+  else if(strcmp(token[0],"out.w")==0) {
+    if(i==3){
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
+      _delay_ms(5);
+      int channel = atoi(token[1]);
+      int tmp = atoi(token[2]);
+      if (channel <= 4 && channel >=1)
+      {
+        if (tmp == 0){
+          amo3_enable[channel-1]=false;
+	  printf("out.w : output %d disabled\n", channel);
+        }
+        else if (tmp == 1){
+          amo3_enable[channel-1]=true;
+	  printf("out.w : output %d enabled\n", channel);
+        }
+      }
+    }
+  }
+  else if(strcmp(token[0],"id?")==0) {
+    if(i==1) {
+      printf("%s\n", device_name);
+      printf("Device ID : %s\n", device_id);
+      printf("Hardware ID : %s\n", hardware_id);
+      printf("Firmware ID : %s\n", firmware_id);
+    }
+  }
+  else if(strcmp(token[0],"help")==0) {
+    printf("Commands:\nvout.w [channel] [voltage]\nout.w [channel] [enable]\nid?\n");
   }
   //for debugging... simulating fault handling
-  else if(strcmp(token[0],"pwr.w")==0)
-  {
+  else if(strcmp(token[0],"pwr.w")==0) {
     printf("PWR PIN: %d\n",AMO6_CLEO_nPWR);
   }
-  else if(strcmp(token[0],"trigger_fault.w")==0)
-  {
+  else if(strcmp(token[0],"trigger_fault.w")==0) {
     debugging_power = !debugging_power;
     printf("Fault triggered: %d\n",!amo3_tec_state);
   }
-  // (+) default commands
   else {
     printf("Command not recognized.\nType 'help' for list of commands.\n");
   }
@@ -982,7 +942,7 @@ void amo6_screen_draw ()
     if (!amo3_save_flag)
       strcpy(text_buf, amo3_enable[0]? "ON" : "OFF");
     else
-      strcpy(text_buf, "SAVED");
+      strcpy(text_buf, "Saved");
     CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "1");
   
@@ -992,7 +952,7 @@ void amo6_screen_draw ()
     if (!amo3_save_flag)
       strcpy(text_buf, amo3_enable[2]? "ON" : "OFF");
     else
-      strcpy(text_buf, "SAVED");
+      strcpy(text_buf, "Saved");
     CleO.StringExt(FONT_SANS_5, 120, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "3");
 
@@ -1002,7 +962,7 @@ void amo6_screen_draw ()
     if (!amo3_save_flag)
       strcpy(text_buf, amo3_enable[1]? "ON" : "OFF");
     else
-      strcpy(text_buf, "SAVED");
+      strcpy(text_buf, "Saved");
     CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW2_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "2");
   
@@ -1012,7 +972,7 @@ void amo6_screen_draw ()
     if (!amo3_save_flag)
       strcpy(text_buf, amo3_enable[3]? "ON" : "OFF");
     else
-      strcpy(text_buf, "SAVED");
+      strcpy(text_buf, "Saved");
     CleO.StringExt(FONT_SANS_5, 360, AMO6_SCREEN_ROW4_Y, amo6_screen_text_color, MM, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "4");
   }
@@ -1139,4 +1099,4 @@ void amo6_screen_processShortPress () {
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
 }
 
-#endif // AMO2_H
+#endif // AMO3_H
