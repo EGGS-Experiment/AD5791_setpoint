@@ -12,7 +12,7 @@
 const char device_name[] = "Piezo Controller";
 const char device_id[]   = "AMO3";
 const char hardware_id[] = "0.1.2";
-const char firmware_id[] = "0.0.1";
+const char firmware_id[] = "0.0.2";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -770,6 +770,14 @@ void amo6_serial_parse ()
       printf("vout.w : set output #%d to %0.3f\n", channel, amo3_voltage_out[channel-1]);
     }
   }
+  else if(strcmp(token[0],"vout.r")==0) {
+    if(i==2){
+      int channel = atoi(token[1]);
+      if (channel <= 4 && channel >=1){
+	printf("%0.3f\n", amo3_mv_latched[channel-1]/1000.0);
+      }
+    }
+  }
   else if(strcmp(token[0],"out.w")==0) {
     if(i==3){
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
@@ -786,6 +794,15 @@ void amo6_serial_parse ()
           amo3_enable[channel-1]=true;
 	  printf("out.w : output %d enabled\n", channel);
         }
+      }
+    }
+  }
+  else if(strcmp(token[0],"out.r")==0) {
+    if(i==2){
+      int channel = atoi(token[1]);
+      if (channel <= 4 && channel >=1)
+      {
+	printf("%d\n", amo3_enable[channel-1]);
       }
     }
   }
