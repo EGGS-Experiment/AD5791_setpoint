@@ -36,8 +36,8 @@ const char firmware_id[] = "0.0.2";
 
 //  AMO3
 bool    debugging_power         = false;
-bool    amo3_tec_state          = true;
-bool    amo3_tec_state_latched  = true; 
+bool    amo3_pwr_state          = true;
+bool    amo3_pwr_state_latched  = true; 
 double  amo3_voltage_out  [4]   = {0.0, 0.0, 0.0, 0.0}; 
 bool    amo3_enable  [4]        = {false, false, false, false};
 enum {
@@ -241,13 +241,13 @@ void amo3_fault_check ()
   if (AMO6_CLEO_nPWR || debugging_power){
     if(amo3_fault != amo3_fault_pwr){
       amo3_fault = amo3_fault_pwr;
-      if (amo3_tec_state){
+      if (amo3_pwr_state){
         int i;
         //disable all output
         for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); }
 	for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
         for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
-        amo3_tec_state = false;
+        amo3_pwr_state = false;
       }
     }
   }
@@ -256,8 +256,8 @@ void amo3_fault_check ()
       amo3_fault_prev = amo3_fault;
       amo3_fault = amo3_fault_none;
       // NOTE, if the AMO6_CLEO_nPWR fault is turned to logiv low after being in logic high, we allow user to alter voltages again 
-      if (!amo3_tec_state){
-        amo3_tec_state = true;
+      if (!amo3_pwr_state){
+        amo3_pwr_state = true;
       }
     }
   }
@@ -267,7 +267,7 @@ void amo3_hardware_update ()
 {
   // sends voltage values
   uint8_t i;
-  if (amo3_tec_state && (amo3_fault==amo3_fault_none)) { ;
+  if (amo3_pwr_state && (amo3_fault==amo3_fault_none)) { ;
     for (i=0;i<4;++i){
       uint32_t val = (amo3_enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
       if (val != amo3_mv_latched[i]){
@@ -280,14 +280,14 @@ void amo3_hardware_update ()
       --amo3_save_flag;
   }
   // fault handling
-  if(amo3_tec_state != amo3_tec_state_latched) { //tec on/off
-    if (amo3_tec_state && (amo3_fault==amo3_fault_none)){ ;
+  if(amo3_pwr_state != amo3_pwr_state_latched) {
+    if (amo3_pwr_state && (amo3_fault==amo3_fault_none)){ ;
       //IF FAULT -> NO FAULT
     }
     else{ ;
       //IF NO FAULT -> FAULT
     }
-    amo3_tec_state_latched = amo3_tec_state;
+    amo3_pwr_state_latched = amo3_pwr_state;
   }
 }
 
@@ -296,7 +296,7 @@ void amo3_VOUT_init ()
   uint8_t i;
   for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); };
   for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
-  amo3_tec_state = true;
+  amo3_pwr_state = true;
 
   // testing
   //amo3_VOUT_dac.setCounts(0, test_output); //test offset
@@ -391,7 +391,7 @@ void amo6_buttons_update ()
   float tmp;
   bool sw1_now = (PINB>>PB6) & 0x01;
   bool sw2_now = (PINB>>PB5) & 0x01;
-  if (!amo3_tec_state)
+  if (!amo3_pwr_state)
     return;
   
   for (tag=0;tag<AMO6_SCREEN_TAGS-1;tag++) { //find active screen tag
@@ -774,7 +774,7 @@ void amo6_serial_parse ()
     if(i==2){
       int channel = atoi(token[1]);
       if (channel <= 4 && channel >=1){
-	printf("%0.3f\n", amo3_mv_latched[channel-1]/1000.0);
+	printf("%0.3f\n", amo3_voltage_out[channel-1]);
       }
     }
   }
@@ -823,7 +823,7 @@ void amo6_serial_parse ()
   }
   else if(strcmp(token[0],"trigger_fault.w")==0) {
     debugging_power = !debugging_power;
-    printf("Fault triggered: %d\n",!amo3_tec_state);
+    printf("Fault triggered: %d\n",!amo3_pwr_state);
   }
   else {
     printf("Command not recognized.\nType 'help' for list of commands.\n");
@@ -1052,7 +1052,7 @@ void amo6_screen_shortPress (bool *press_detected)
 void amo6_screen_processShortPress () {
   int i;
   bool sel;
-  if(!amo3_tec_state)
+  if(!amo3_pwr_state)
     return;
   
   switch (amo6_screen_current_tag) {
