@@ -1,6 +1,5 @@
 #ifndef AMO3_H
 #define AMO3_H 1
-int thkim = 1;
 
 #include <stdlib.h>
 #include <math.h>
@@ -915,28 +914,30 @@ void amo6_screen_draw ()
 
   // Draw the Voltage boxes
   // Draw the Voltage strings
+  
   //Voltage
   CleO.Tag(amo6_screen_voltage_output1);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output1] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[0]);
-  CleO.StringExt(FONT_SANS_6, 280, 240, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_6, 180, 240, amo6_screen_text_color, ML, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 300, 240+8, amo6_screen_text_color, MM, 0, 0, "V");
+  
   //Current
   CleO.Tag(amo6_screen_voltage_output2);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output2] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[1]);
-  CleO.StringExt(FONT_SANS_6, 360, 240, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 380, 240+8, amo6_screen_text_color, MM, 0, 0, "A");
+  CleO.StringExt(FONT_SANS_6, 340, 240, amo6_screen_text_color, ML, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_4, 460, 240+8, amo6_screen_text_color, MM, 0, 0, "A");
   
-    //Coarse Steps
+  //Coarse Steps
   CleO.Tag(amo6_screen_voltage_output3);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output3] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[2]);
-  CleO.StringExt(FONT_SANS_6, 440, 80, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 460, 80+8, amo6_screen_text_color, MM, 0, 0, "Deg");
+  CleO.StringExt(FONT_SANS_6, 330, 80, amo6_screen_text_color, ML, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_4, 460, 80, amo6_screen_text_color, MM, 0, 0, "°");
   
       //Fine Steps
   CleO.Tag(amo6_screen_voltage_output4);
@@ -944,7 +945,7 @@ void amo6_screen_draw ()
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[3]);
   CleO.StringExt(FONT_SANS_6, 260, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 300, 40+8, amo6_screen_text_color, MM, 0, 0, "Steps");
+  CleO.StringExt(FONT_SANS_3, 300, 40+8, amo6_screen_text_color, MM, 0, 0, "Steps");
 
 
 
