@@ -1,5 +1,6 @@
 #ifndef AMO3_H
 #define AMO3_H 1
+int thkim = 0;
 
 #include <stdlib.h>
 #include <math.h>
