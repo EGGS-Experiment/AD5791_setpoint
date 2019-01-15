@@ -133,8 +133,10 @@ enum {
   amo6_screen_enable_output2   , // 6
   amo6_screen_enable_output3   , // 7
   amo6_screen_enable_output4   , // 8
+  fine_step_adjustment         , // 9
+  stepper_motor_number         , // 10
 };
-#define AMO6_SCREEN_TAGS 8	
+#define AMO6_SCREEN_TAGS 10	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
 int16_t  amo6_screen_x  , amo6_screen_y  ;
@@ -255,7 +257,7 @@ void amo3_fault_check ()
     if (amo3_fault != amo3_fault_none){
       amo3_fault_prev = amo3_fault;
       amo3_fault = amo3_fault_none;
-      // NOTE, if the AMO6_CLEO_nPWR fault is turned to logiv low after being in logic high, we allow user to alter voltages again 
+      // NOTE, if the AMO6_CLEO_nPWR fault is turned to logic low after being in logic high, we allow user to alter voltages again 
       if (!amo3_pwr_state){
         amo3_pwr_state = true;
       }
@@ -406,6 +408,7 @@ void amo6_buttons_update ()
       case amo6_screen_voltage_output2	:
       case amo6_screen_voltage_output3	:
       case amo6_screen_voltage_output4	:
+      case fine_step_adjustment         :
 	break;
       // save the state is nothing is selected
       default :
@@ -858,11 +861,11 @@ void amo6_screen_init ()
   CleO.SetBackgroundcolor(0xe9d3ebUL);
   sprintf(buf_text,device_name);
   CleO.StringExt(FONT_SANS_4, AMO6_SCREEN_W/2, 30, amo6_screen_text_color, MM, 0, 0, buf_text);
-  sprintf(buf_text,"Device ID : %s", device_id);
+  sprintf(buf_text,"Device ID      : %s", device_id);
   CleO.StringExt(FONT_BIT_3, 10, 100, amo6_screen_text_color, ML, 0, 0, buf_text);
-  sprintf(buf_text,"Hardware ID : %s", hardware_id);
+  sprintf(buf_text,"Hardware ID    : %s", hardware_id);
   CleO.StringExt(FONT_BIT_3 , 10 , 120 , amo6_screen_text_color , ML , 0 , 0, buf_text);
-  sprintf(buf_text,"Firmware ID : %s", firmware_id);
+  sprintf(buf_text,"Firmware ID    : %s", firmware_id);
   CleO.StringExt(FONT_BIT_3, 10, 140, amo6_screen_text_color, ML, 0, 0, buf_text);
 //  sprintf(buf_text,"%lu,%2.2f,%0.5f,%lu", amo1_iout_max_set_ua/1000, amo1_iout_res, amo1_iout_ua_to_cnts, amo1_pfet_max_mw);
 //  CleO.StringExt(FONT_BIT_3, 10, 180, amo6_screen_text_color, ML, 0, 0, buf_text);
@@ -920,7 +923,7 @@ void amo6_screen_draw ()
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output1] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[0]);
-  CleO.StringExt(FONT_SANS_6, 180, 240, amo6_screen_text_color, ML, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_6, 240, 240, amo6_screen_text_color, MM, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 300, 240+8, amo6_screen_text_color, MM, 0, 0, "V");
   
   //Current
@@ -928,7 +931,7 @@ void amo6_screen_draw ()
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output2] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[1]);
-  CleO.StringExt(FONT_SANS_6, 340, 240, amo6_screen_text_color, ML, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_6, 400, 240, amo6_screen_text_color, MM, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 460, 240+8, amo6_screen_text_color, MM, 0, 0, "A");
   
   //Coarse Steps
@@ -937,15 +940,29 @@ void amo6_screen_draw ()
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[2]);
   CleO.StringExt(FONT_SANS_6, 330, 80, amo6_screen_text_color, ML, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 460, 80, amo6_screen_text_color, MM, 0, 0, "°");
+  CleO.StringExt(FONT_SANS_4, 460, 80, amo6_screen_text_color, MM, 0, 0, "d");
   
-      //Fine Steps
+  //Fine Steps
   CleO.Tag(amo6_screen_voltage_output4);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output4] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%3.3f", amo3_voltage_out[3]);
-  CleO.StringExt(FONT_SANS_6, 260, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_3, 300, 40+8, amo6_screen_text_color, MM, 0, 0, "Steps");
+  CleO.StringExt(FONT_SANS_6, 240, 40, amo6_screen_text_color, MM, 0, 0, text_buf);
+  
+  //Fine Step Adjustment
+  CleO.Tag(fine_step_adjustment);
+  CleO.RectangleColor(amo6_screen_select[fine_step_adjustment] ? CLEO_SELECT : MY_WHITE);
+  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
+  sprintf(text_buf, "%3.3f", 1.8);
+  CleO.StringExt(FONT_SANS_6, 260, 120, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_3, 310, 120+8, amo6_screen_text_color, MR, 0, 0, "Steps");
+  
+  //Stepper Motor Number
+  CleO.Tag(stepper_motor_number);
+  CleO.RectangleColor(amo6_screen_select[stepper_motor_number] ? CLEO_SELECT : MY_WHITE);
+  CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
+  sprintf(text_buf, "%3.3f", 12);
+  CleO.StringExt(FONT_SANS_6, 80, 80, amo6_screen_text_color, MM, 0, 0, text_buf);
 
 
 
@@ -956,7 +973,7 @@ void amo6_screen_draw ()
     // Draw the ON/OFF strings
     CleO.Tag(amo6_screen_enable_output1);
     CleO.RectangleColor(amo3_enable[0] ? MY_GREEN : MY_RED);
-    CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-3*AMO6_SCREEN_OFFSET);
+    CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
     if (!amo3_save_flag)
       strcpy(text_buf, amo3_enable[0]? "ON" : "OFF");
     else
