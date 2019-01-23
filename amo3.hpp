@@ -75,6 +75,17 @@ uint32_t     amo3_mv_latched[4]         = {0,0,0,0};
 float        max_V                      = 150.000;
 AD5544       amo3_VOUT_dac  (SPI_FLEX_AMO3_VOUT);
 
+//  Stepper Motor output
+uint16_t     stepper_motor_number       = 1;
+uint16_t     max_stepper_motor_number   = 12;
+int16_t      step_number                = 0;
+uint16_t     max_step_number            = 5;
+uint16_t     max_steps                  = 2000;
+int16_t      step_array[12][6]           ;
+double       total_angle                = 0;
+float        step_size                  = 1.8;
+
+
 void  amo3_VOUT_init    ();
 void  amo3_VOUT_set_mv  (uint32_t val, uint32_t dac);
 
@@ -127,16 +138,16 @@ enum {
   amo6_screen_null_tag         , // 0
   amo6_screen_voltage_output1  , // 1
   amo6_screen_voltage_output2  , // 2
-  amo6_screen_voltage_output3  , // 3
-  amo6_screen_voltage_output4  , // 4
+  coarse_display               , // 3
+  step_counter                 , // 4
   amo6_screen_enable_output1   , // 5
   amo6_screen_enable_output2   , // 6
   amo6_screen_enable_output3   , // 7
   amo6_screen_enable_output4   , // 8
   fine_step_adjustment         , // 9
-  stepper_motor_number         , // 10
+  stepper_motor_counter        , // 10
 };
-#define AMO6_SCREEN_TAGS 10	
+#define AMO6_SCREEN_TAGS 11	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
 int16_t  amo6_screen_x  , amo6_screen_y  ;
@@ -247,7 +258,7 @@ void amo3_fault_check ()
         int i;
         //disable all output
         for (i = 0; i<4; ++i){ amo3_VOUT_set_mv(0, i); }
-	for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
+        for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
         for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
         amo3_pwr_state = false;
       }
@@ -406,11 +417,12 @@ void amo6_buttons_update ()
       // do not do anything if something is selected
       case amo6_screen_voltage_output1	:
       case amo6_screen_voltage_output2	:
-      case amo6_screen_voltage_output3	:
-      case amo6_screen_voltage_output4	:
+      case coarse_display	            :
+      case step_counter             	:
       case fine_step_adjustment         :
+      case stepper_motor_counter        :
 	break;
-      // save the state is nothing is selected
+      // save the state if nothing is selected
       default :
 	//display save flag for 4 loops/iterations
 	amo3_save_flag = 4;
@@ -455,21 +467,37 @@ void amo6_buttons_update ()
 	  if (tmp<0) tmp=0;
 	  amo3_voltage_out[1] = tmp;
           break;
-        case amo6_screen_voltage_output3	:
-	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+        case coarse_display	:
+	 /* AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo3_voltage_out[2] - 1;
 	  if (tmp>max_V) tmp=max_V;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[2] = tmp;
+	  amo3_voltage_out[2] = tmp;   */
           break;
-        case amo6_screen_voltage_output4	:
+        case step_counter	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = amo3_voltage_out[3] - 1;
-	  if (tmp>max_V) tmp=max_V;
+	  tmp = step_array[stepper_motor_number-1][step_number] - 1;
+	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[3] = tmp;
+	  step_array[stepper_motor_number-1][step_number] = tmp;
+          break;
+        case stepper_motor_counter         :
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = stepper_motor_number - 1;
+	  if (tmp>max_stepper_motor_number) tmp=1;
+	  if (tmp<1) tmp=max_stepper_motor_number;
+	  stepper_motor_number = tmp;
+          break;
+        case fine_step_adjustment         :
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = step_number - 1;
+	  if (tmp>max_step_number) tmp=0;
+	  if (tmp<0) tmp=max_step_number;
+	  step_number = tmp;
           break;
         }
         AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -506,21 +534,37 @@ void amo6_buttons_update ()
 	  if (tmp<0) tmp=0;
 	  amo3_voltage_out[1] = tmp;
           break;
-        case amo6_screen_voltage_output3	:
-	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+        case coarse_display	:
+	 /* AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo3_voltage_out[2] + 1;
 	  if (tmp>max_V) tmp=max_V;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[2] = tmp;
+	  amo3_voltage_out[2] = tmp; */
           break;
-        case amo6_screen_voltage_output4	:
+        case step_counter	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = amo3_voltage_out[3] + 1;
-	  if (tmp>max_V) tmp=max_V;
+	  tmp = step_array[stepper_motor_number-1][step_number] + 1;
+	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[3] = tmp;
+	  step_array[stepper_motor_number-1][step_number] = tmp;
+          break;
+        case stepper_motor_counter         :
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = stepper_motor_number + 1;
+	  if (tmp>max_stepper_motor_number) tmp=1;
+	  if (tmp<1) tmp=max_stepper_motor_number;
+	  stepper_motor_number = tmp;
+          break;
+        case fine_step_adjustment         :
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = step_number + 1;
+	  if (tmp>max_step_number) tmp=0;
+	  if (tmp<0) tmp=max_step_number;
+	  step_number = tmp;
           break;
         }
         AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -558,21 +602,37 @@ void amo6_buttons_update ()
 	  if (tmp<0) tmp=0;
 	  amo3_voltage_out[1] = tmp;
           break;
-        case amo6_screen_voltage_output3	:
-	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+        case coarse_display	:
+	 /* AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo3_voltage_out[2] + 10;
 	  if (tmp>max_V) tmp=max_V;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[2] = tmp;
+	  amo3_voltage_out[2] = tmp;   */
           break;
-        case amo6_screen_voltage_output4	:
+        case step_counter               	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = amo3_voltage_out[3] + 10;
-	  if (tmp>max_V) tmp=max_V;
+	  tmp = step_array[stepper_motor_number-1][step_number] + 10;
+	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[3] = tmp;
+	  step_array[stepper_motor_number-1][step_number] = tmp;
+          break;
+        case stepper_motor_counter       	:
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = stepper_motor_number + 2;
+	  if (tmp>max_stepper_motor_number) tmp=1;
+	  if (tmp<1) tmp=max_stepper_motor_number;
+	  stepper_motor_number = tmp;
+          break;
+        case fine_step_adjustment         :
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = step_number + 1;
+	  if (tmp>max_step_number) tmp=0;
+	  if (tmp<0) tmp=max_step_number;
+	  step_number = tmp;
           break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -608,21 +668,37 @@ void amo6_buttons_update ()
 	  if (tmp<0) tmp=0;
 	  amo3_voltage_out[1] = tmp;
           break;
-        case amo6_screen_voltage_output3	:
-	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+        case coarse_display	:
+	/*  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
 	  tmp = amo3_voltage_out[2] - 10;
 	  if (tmp>max_V) tmp=max_V;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[2] = tmp;
+	  amo3_voltage_out[2] = tmp;   */
           break;
-        case amo6_screen_voltage_output4	:
+        case step_counter	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = amo3_voltage_out[3] - 10;
-	  if (tmp>max_V) tmp=max_V;
+	  tmp = step_array[stepper_motor_number-1][step_number] - 10;
+	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<0) tmp=0;
-	  amo3_voltage_out[3] = tmp;
+	  step_array[stepper_motor_number-1][step_number] = tmp;
+          break;
+        case stepper_motor_counter       	:
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = stepper_motor_number - 2;
+	  if (tmp>max_stepper_motor_number) tmp=1;
+	  if (tmp<1) tmp=max_stepper_motor_number;
+	  stepper_motor_number = tmp;
+          break;
+        case fine_step_adjustment         :
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(5);
+	  tmp = step_number - 1;
+	  if (tmp>max_step_number) tmp=0;
+	  if (tmp<0) tmp=max_step_number;
+	  step_number = tmp;
           break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -668,8 +744,8 @@ void amo6_buttons_update ()
 	if (tmp<0) tmp=0;
 	amo3_voltage_out[1] = tmp;
         break;
-      case amo6_screen_voltage_output3	:
-	val = val/10;
+      case coarse_display	:
+	/* val = val/10;
 	if (val!=0) {
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(1);
@@ -677,18 +753,40 @@ void amo6_buttons_update ()
 	tmp = amo3_voltage_out[2] + val/200.0;
 	if (tmp>max_V) tmp=max_V;
 	if (tmp<0) tmp=0;
-	amo3_voltage_out[2] = tmp;
+	amo3_voltage_out[2] = tmp; */
         break;
-      case amo6_screen_voltage_output4	:
+      case step_counter	:
 	val = val/10;
 	if (val!=0) {
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(1);
 	}
-	tmp = amo3_voltage_out[3] + val/200.0;
-	if (tmp>max_V) tmp=max_V;
+	tmp = step_array[stepper_motor_number-1][step_number] + val/200.0;
+	if (tmp>max_steps) tmp=max_steps;
 	if (tmp<0) tmp=0;
-	amo3_voltage_out[3] = tmp;
+	step_array[stepper_motor_number-1][step_number] = tmp;
+        break;
+      case stepper_motor_counter    	:
+	val = val/10;
+	if (val!=0) {
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(1);
+	}
+	tmp = stepper_motor_number + val/200.0;
+	if (tmp>max_stepper_motor_number) tmp=1;
+	if (tmp<1) tmp=max_stepper_motor_number;
+	stepper_motor_number = tmp;
+        break;
+        case fine_step_adjustment       	:
+	val = val/10;
+	if (val!=0) {
+	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+	  _delay_ms(1);
+	}
+	tmp = step_number + val/200.0;
+	if (tmp>max_step_number) tmp=0;
+	if (tmp<0) tmp=max_step_number;
+	step_number = tmp;
         break;
     }
     if ((val<=-1)||(val>=1)) {
@@ -922,46 +1020,53 @@ void amo6_screen_draw ()
   CleO.Tag(amo6_screen_voltage_output1);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output1] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%3.3f", amo3_voltage_out[0]);
-  CleO.StringExt(FONT_SANS_6, 240, 240, amo6_screen_text_color, MM, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 300, 240+8, amo6_screen_text_color, MM, 0, 0, "V");
+  sprintf(text_buf, "%2.1f", amo3_voltage_out[0]);
+  CleO.StringExt(FONT_SANS_6, 280, 240, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_4, 290, 240+8, amo6_screen_text_color, MM, 0, 0, "V");
   
   //Current
   CleO.Tag(amo6_screen_voltage_output2);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output2] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%3.3f", amo3_voltage_out[1]);
-  CleO.StringExt(FONT_SANS_6, 400, 240, amo6_screen_text_color, MM, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 460, 240+8, amo6_screen_text_color, MM, 0, 0, "A");
+  sprintf(text_buf, "%2.1f", amo3_voltage_out[1]);
+  CleO.StringExt(FONT_SANS_6, 438, 240, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_4, 450, 240+8, amo6_screen_text_color, MM, 0, 0, "A");
   
   //Coarse Steps
-  CleO.Tag(amo6_screen_voltage_output3);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output3] ? CLEO_SELECT : MY_WHITE);
+  CleO.Tag(coarse_display);
+  CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%3.3f", amo3_voltage_out[2]);
-  CleO.StringExt(FONT_SANS_6, 330, 80, amo6_screen_text_color, ML, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 460, 80, amo6_screen_text_color, MM, 0, 0, "d");
+  total_angle=0;
+  for (int i=0;i<=5;i++){
+      double tmp1=step_array[stepper_motor_number-1][i]*(step_size/pow(2,i));
+      total_angle+=tmp1;
+  }
+  sprintf(text_buf, "%.1f", total_angle);
+  CleO.StringExt(FONT_SANS_6, 459, 80, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_2, 465, 60, amo6_screen_text_color, MM, 0, 0, "o");
   
   //Fine Steps
-  CleO.Tag(amo6_screen_voltage_output4);
-  CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output4] ? CLEO_SELECT : MY_WHITE);
+  CleO.Tag(step_counter);
+  CleO.RectangleColor(amo6_screen_select[step_counter] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%3.3f", amo3_voltage_out[3]);
-  CleO.StringExt(FONT_SANS_6, 240, 40, amo6_screen_text_color, MM, 0, 0, text_buf);
+  sprintf(text_buf, "%d", step_array[stepper_motor_number-1][step_number]);
+  CleO.StringExt(FONT_SANS_6, 248, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_2, 280, 40+8, amo6_screen_text_color, MM, 0, 0, "steps");
   
   //Fine Step Adjustment
   CleO.Tag(fine_step_adjustment);
   CleO.RectangleColor(amo6_screen_select[fine_step_adjustment] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%3.3f", 1.8);
-  CleO.StringExt(FONT_SANS_6, 260, 120, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_3, 310, 120+8, amo6_screen_text_color, MR, 0, 0, "Steps");
+  sprintf(text_buf, "1/%.f ", pow(2,step_number));
+  CleO.StringExt(FONT_SANS_6, 240, 120, amo6_screen_text_color, MM, 0, 0, text_buf);
+  sprintf(text_buf, "%.3f", step_size/pow(2,step_number));
+  CleO.StringExt(FONT_SANS_1, 305, 150, amo6_screen_text_color, MR, 0, 0, text_buf);
   
-  //Stepper Motor Number
-  CleO.Tag(stepper_motor_number);
-  CleO.RectangleColor(amo6_screen_select[stepper_motor_number] ? CLEO_SELECT : MY_WHITE);
+  //Stepper Motor Counter
+  CleO.Tag(stepper_motor_counter);
+  CleO.RectangleColor(amo6_screen_select[stepper_motor_counter] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%3.3f", 12);
+  sprintf(text_buf, "#%d", stepper_motor_number);
   CleO.StringExt(FONT_SANS_6, 80, 80, amo6_screen_text_color, MM, 0, 0, text_buf);
 
 
@@ -1019,7 +1124,7 @@ void amo6_screen_touch ()
 
 void amo6_screen_processButtons ()
 {
-  // Collet Tags
+  // Collect Tags
   //NOTE: for more than 13 tags, you must manually tag!
   CleO.TouchCoordinates(amo6_screen_x, amo6_screen_y, amo6_screen_current_dur, amo6_screen_current_tag);
   
@@ -1050,7 +1155,7 @@ void amo6_screen_processShortPress () {
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(2);
       sel = !amo6_screen_select[amo6_screen_voltage_output1];
-      for(i=0;i<AMO6_SCREEN_TAGS-1;i++)amo6_screen_select[i]=0;
+      for(i=0;i<AMO6_SCREEN_TAGS;i++)amo6_screen_select[i]=0;
       amo6_screen_select[amo6_screen_voltage_output1] = sel;
       break;
     case amo6_screen_enable_output1	:
@@ -1058,13 +1163,13 @@ void amo6_screen_processShortPress () {
       _delay_ms(5);
       amo3_enable[0] = !amo3_enable[0];
       for(i=0;i<amo6_screen_voltage_output1;i++) amo6_screen_select[i]=0;
-      for(i=amo6_screen_voltage_output1+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      for(i=amo6_screen_voltage_output1+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       break;
     case amo6_screen_voltage_output2	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(2);
       sel = !amo6_screen_select[amo6_screen_voltage_output2];
-      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       amo6_screen_select[amo6_screen_voltage_output2] = sel;
       break;
     case amo6_screen_enable_output2	:
@@ -1072,35 +1177,49 @@ void amo6_screen_processShortPress () {
       _delay_ms(5);
       amo3_enable[1] = !amo3_enable[1];
       for(i=0;i<amo6_screen_voltage_output2;i++) amo6_screen_select[i]=0;
-      for(i=amo6_screen_voltage_output2+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      for(i=amo6_screen_voltage_output2+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       break;
-    case amo6_screen_voltage_output3	:
+    case coarse_display	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(2);
-      sel = !amo6_screen_select[amo6_screen_voltage_output3];
-      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
-      amo6_screen_select[amo6_screen_voltage_output3] = sel;
+      sel = !amo6_screen_select[coarse_display];
+      for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[coarse_display] = sel;
       break;
     case amo6_screen_enable_output3	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
       amo3_enable[2] = !amo3_enable[2];
-      for(i=0;i<amo6_screen_voltage_output3;i++) amo6_screen_select[i]=0;
-      for(i=amo6_screen_voltage_output3+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      for(i=0;i<coarse_display;i++) amo6_screen_select[i]=0;
+      for(i=coarse_display+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       break;
-    case amo6_screen_voltage_output4	:
+    case step_counter	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(2);
-      sel = !amo6_screen_select[amo6_screen_voltage_output4];
-      for(i=0;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
-      amo6_screen_select[amo6_screen_voltage_output4] = sel;
+      sel = !amo6_screen_select[step_counter];
+      for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[step_counter] = sel;
       break;
     case amo6_screen_enable_output4	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
       amo3_enable[3] = !amo3_enable[3];
-      for(i=0;i<amo6_screen_voltage_output4;i++) amo6_screen_select[i]=0;
-      for(i=amo6_screen_voltage_output4+1;i<AMO6_SCREEN_TAGS-1;i++) amo6_screen_select[i]=0;
+      for(i=0;i<step_counter;i++) amo6_screen_select[i]=0;
+      for(i=step_counter+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
+      break;
+    case fine_step_adjustment	:
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(2);
+      sel = !amo6_screen_select[fine_step_adjustment];
+      for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[fine_step_adjustment] = sel;
+      break;
+    case stepper_motor_counter	:
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(2);
+      sel = !amo6_screen_select[stepper_motor_counter];
+      for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
+      amo6_screen_select[stepper_motor_counter] = sel;
       break;
   }
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
