@@ -79,12 +79,11 @@ AD5544       amo3_VOUT_dac  (SPI_FLEX_AMO3_VOUT);
 //  Stepper Motor output
 uint16_t     stepper_motor_number       = 1;    //Tracks active stepper motor
 uint16_t     max_stepper_motor_number   = 12;
-int16_t      step_number                = 0;    //Step Size Counter
+int16_t      step_number                = 0;    //Step size counter
 uint16_t     max_step_number            = 5;
 int16_t      max_steps                  = 2000;
-int16_t      step_array[12][6]           ;
-int16_t      move_array[12][6]           ;
-double       total_angle                = 0;
+int16_t      step_array[12][6]           ;      //Holds total steps
+int16_t      move_array[12][6]           ;      //Holds steps to move
 float        step_size                  = 1.8;
 
 
@@ -145,7 +144,7 @@ enum {
   on_off_switch                , // 5
   calibrate_button             , // 6
   move_button                  , // 7
-  amo6_screen_enable_output4   , // 8
+  blank                        , // 8
   fine_step_adjustment         , // 9
   stepper_motor_counter        , // 10
   screen_bug                   , // 11
@@ -402,12 +401,13 @@ ISR(PCINT0_vect) //SW1 SW2
 
 void move_motor (){
   int d_step = 0;
+  //Set output to stepper drivers
   for (int i = 0; i<=5; i++){
+      //Configure microstepping
       d_step = step_array[stepper_motor_number-1][i]-move_array[stepper_motor_number-1][i];    //Calculate step difference
       if (d_step<0){
         //set negative direction
       }
-      //Configure micrcostepping
       for (int i = 0; i<abs(d_step); i++){
         /*
          port address = 1;
@@ -1065,10 +1065,9 @@ void amo6_screen_draw ()
   CleO.Tag(coarse_display);
   CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-  total_angle=0;
+  double total_angle=0;
   for (int i=0;i<=5;i++){
-      double tmp1=step_array[stepper_motor_number-1][i]*(step_size/pow(2,i));
-      total_angle+=tmp1;
+      total_angle +=step_array[stepper_motor_number-1][i]*(step_size/pow(2,i));
   }
   sprintf(text_buf, "%.1f", total_angle);
   CleO.StringExt(FONT_SANS_5, 459, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
@@ -1096,7 +1095,7 @@ void amo6_screen_draw ()
   CleO.StringExt(FONT_SANS_6, 240, 120, amo6_screen_text_color, MM, 0, 0, text_buf);
   sprintf(text_buf, "%.3f", step_size/pow(2,step_number));
   CleO.StringExt(FONT_SANS_1, 305, 150, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_TINY, 306, 140, amo6_screen_text_color, ML, 0, 0, " o");
+  CleO.StringExt(FONT_TINY, 306, 142, amo6_screen_text_color, ML, 0, 0, " o");
   
   //Stepper Motor Counter
   CleO.Tag(stepper_motor_counter);
