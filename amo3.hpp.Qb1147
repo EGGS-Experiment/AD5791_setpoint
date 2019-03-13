@@ -142,15 +142,14 @@ enum {
   amo6_screen_voltage_output2  , // 2
   coarse_display               , // 3
   step_counter                 , // 4
-  on_off_switch                , // 5
-  calibrate_button             , // 6
-  move_button                  , // 7
+  amo6_screen_enable_output1   , // 5
+  amo6_screen_enable_output2   , // 6
+  amo6_screen_enable_output3   , // 7
   amo6_screen_enable_output4   , // 8
   fine_step_adjustment         , // 9
   stepper_motor_counter        , // 10
-  screen_bug                   , // 11
 };
-#define AMO6_SCREEN_TAGS 12	
+#define AMO6_SCREEN_TAGS 11	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
 int16_t  amo6_screen_x  , amo6_screen_y  ;
@@ -403,7 +402,7 @@ ISR(PCINT0_vect) //SW1 SW2
 void move_motor (){
   int d_step = 0;
   for (int i = 0; i<=5; i++){
-      d_step = step_array[stepper_motor_number-1][i]-move_array[stepper_motor_number-1][i];    //Calculate step difference
+      d_step = step_array[stepper_motor_number-1]-move_array[stepper_motor_number-1][i];    //Calculate step difference
       if (d_step<0){
         //set negative direction
       }
@@ -411,11 +410,11 @@ void move_motor (){
       for (int i = 0; i<abs(d_step); i++){
         /*
          port address = 1;
-         _delay_ms(8);
+         delay(8);
          port address = 0;
          */
       }
-      move_array[stepper_motor_number-1][i]=step_array[stepper_motor_number-1][i];
+      move_array[stepper_motor_number-1]=step_array[stepper_motor_number-1][i];
   }
   
 }
@@ -1036,83 +1035,72 @@ void amo6_screen_draw ()
 
   char text_buf[50];
 
-  // Draw Boxes and Strings
+  // Draw the Voltage boxes
+  // Draw the Voltage strings
   
   //Voltage
   CleO.Tag(amo6_screen_voltage_output1);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output1] ? CLEO_SELECT : MY_WHITE);
-  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 200-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%2.1f", amo3_voltage_out[0]);
-  CleO.StringExt(FONT_SANS_5, 280, 200, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 290, 200+4, amo6_screen_text_color, MM, 0, 0, "V");
+  CleO.StringExt(FONT_SANS_6, 280, 240, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_4, 290, 240+8, amo6_screen_text_color, MM, 0, 0, "V");
   
   //Current
   CleO.Tag(amo6_screen_voltage_output2);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output2] ? CLEO_SELECT : MY_WHITE);
-  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 280-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+  CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%2.1f", amo3_voltage_out[1]);
-  CleO.StringExt(FONT_SANS_5, 278, 280, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_4, 290, 280+4, amo6_screen_text_color, MM, 0, 0, "A");
-  
-  //Move Button
-  CleO.Tag(move_button);
-  CleO.RectangleColor(MY_GREEN);
-  CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%d", move_array[stepper_motor_number-1][step_number]);
-  CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVE");
+  CleO.StringExt(FONT_SANS_6, 438, 240, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_4, 450, 240+8, amo6_screen_text_color, MM, 0, 0, "A");
   
   //Coarse Steps
   CleO.Tag(coarse_display);
-  CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_WHITE);
-  CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+  CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_PURPLE);
+  CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   total_angle=0;
   for (int i=0;i<=5;i++){
       double tmp1=step_array[stepper_motor_number-1][i]*(step_size/pow(2,i));
       total_angle+=tmp1;
   }
   sprintf(text_buf, "%.1f", total_angle);
-  CleO.StringExt(FONT_SANS_5, 459, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_SANS_2, 465, 20, amo6_screen_text_color, MM, 0, 0, "o");
+  CleO.StringExt(FONT_SANS_6, 459, 80, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_2, 465, 60, amo6_screen_text_color, MM, 0, 0, "o");
   
-  //Calibrate Button
-  CleO.Tag(calibrate_button);
-  CleO.RectangleColor(amo6_screen_select[calibrate_button] ? CLEO_SELECT : MY_GREEN);
-  CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-  CleO.StringExt(FONT_SANS_3, 400, 120, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
-
   //Fine Steps
   CleO.Tag(step_counter);
   CleO.RectangleColor(amo6_screen_select[step_counter] ? CLEO_SELECT : MY_WHITE);
-  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "%d", step_array[stepper_motor_number-1][step_number]);
-  CleO.StringExt(FONT_SANS_5, 248, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
+  CleO.StringExt(FONT_SANS_6, 248, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_2, 280, 40+8, amo6_screen_text_color, MM, 0, 0, "steps");
   
   //Fine Step Adjustment
   CleO.Tag(fine_step_adjustment);
   CleO.RectangleColor(amo6_screen_select[fine_step_adjustment] ? CLEO_SELECT : MY_WHITE);
-  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+  CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160, 80-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "1/%.f ", pow(2,step_number));
   CleO.StringExt(FONT_SANS_6, 240, 120, amo6_screen_text_color, MM, 0, 0, text_buf);
   sprintf(text_buf, "%.3f", step_size/pow(2,step_number));
   CleO.StringExt(FONT_SANS_1, 305, 150, amo6_screen_text_color, MR, 0, 0, text_buf);
-  CleO.StringExt(FONT_TINY, 306, 140, amo6_screen_text_color, ML, 0, 0, " o");
   
   //Stepper Motor Counter
   CleO.Tag(stepper_motor_counter);
   CleO.RectangleColor(amo6_screen_select[stepper_motor_counter] ? CLEO_SELECT : MY_WHITE);
-  CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
+  CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
   sprintf(text_buf, "#%d", stepper_motor_number);
   CleO.StringExt(FONT_SANS_6, 80, 80, amo6_screen_text_color, MM, 0, 0, text_buf);
-  
+
+
+
   // Draw the ON/OFF boxes
 
   // (+) we write string "SAVED" if we write to EEPROM
   if (amo3_fault == amo3_fault_none){
     // Draw the ON/OFF strings
-    CleO.Tag(on_off_switch);
+    CleO.Tag(amo6_screen_enable_output1);
     CleO.RectangleColor(amo3_enable[0] ? MY_GREEN : MY_RED);
-    CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
+    CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160, 160-AMO6_SCREEN_OFFSET);
     if (!amo3_save_flag)
       strcpy(text_buf, amo3_enable[0]? "ON" : "OFF");
     else
@@ -1148,16 +1136,6 @@ void amo6_screen_draw ()
 
   // Update Screen
   CleO.Show();
-  
-  //If calibrate has been toggled, untoggle
-  /*
-  if (amo6_screen_select[calibrate_button] == true){
-    _delay_ms(1000);
-    for(int i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-    CleO.RectangleColor(amo6_screen_select[calibrate_button] ? CLEO_SELECT : MY_WHITE);
-  }
-  */
-
 }
 
 void amo6_screen_touch ()
@@ -1202,7 +1180,7 @@ void amo6_screen_processShortPress () {
       for(i=0;i<AMO6_SCREEN_TAGS;i++)amo6_screen_select[i]=0;
       amo6_screen_select[amo6_screen_voltage_output1] = sel;
       break;
-    case on_off_switch	:
+    case amo6_screen_enable_output1	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
       amo3_enable[0] = !amo3_enable[0];
@@ -1216,22 +1194,12 @@ void amo6_screen_processShortPress () {
       for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       amo6_screen_select[amo6_screen_voltage_output2] = sel;
       break;
-    case move_button	:
+    case amo6_screen_enable_output2	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(5);
-      for(i=0;i<move_button;i++) amo6_screen_select[i]=0;
-      for(i=move_button+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-      move_motor();
-      break;
-    case calibrate_button	:
-      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
-      _delay_ms(5);
-      for(i=0;i<calibrate_button;i++) amo6_screen_select[i]=0;
-      for(i=calibrate_button+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-      for (i=0; i<=5; i++){ //reset step array of given motor
-        move_array[stepper_motor_number-1][i] = 0;
-        step_array[stepper_motor_number-1][i] = 0;
-      }
+      amo3_enable[1] = !amo3_enable[1];
+      for(i=0;i<amo6_screen_voltage_output2;i++) amo6_screen_select[i]=0;
+      for(i=amo6_screen_voltage_output2+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       break;
     case coarse_display	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -1240,12 +1208,26 @@ void amo6_screen_processShortPress () {
       for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       amo6_screen_select[coarse_display] = sel;
       break;
+    case amo6_screen_enable_output3	:
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      amo3_enable[2] = !amo3_enable[2];
+      for(i=0;i<coarse_display;i++) amo6_screen_select[i]=0;
+      for(i=coarse_display+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
+      break;
     case step_counter	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
       _delay_ms(2);
       sel = !amo6_screen_select[step_counter];
       for(i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       amo6_screen_select[step_counter] = sel;
+      break;
+    case amo6_screen_enable_output4	:
+      AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
+      _delay_ms(5);
+      amo3_enable[3] = !amo3_enable[3];
+      for(i=0;i<step_counter;i++) amo6_screen_select[i]=0;
+      for(i=step_counter+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
       break;
     case fine_step_adjustment	:
       AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
