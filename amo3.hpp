@@ -85,6 +85,8 @@ int16_t      max_steps                  = 2000;
 int16_t      step_array[12][6]           ;      //Holds total steps
 int16_t      move_array[12][6]           ;      //Holds steps to move
 float        step_size                  = 1.8;
+float        stepper_voltage[6]         ;
+float        stepper_current[6]         ;
 
 
 void  amo3_VOUT_init    ();
@@ -1050,7 +1052,7 @@ void amo6_screen_draw ()
   CleO.Tag(amo6_screen_voltage_output2);
   CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output2] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 280-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%2.1f", amo3_voltage_out[1]);
+  sprintf(text_buf, "%1.2f", amo3_voltage_out[1]);
   CleO.StringExt(FONT_SANS_5, 278, 280, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_4, 290, 280+4, amo6_screen_text_color, MM, 0, 0, "A");
   
