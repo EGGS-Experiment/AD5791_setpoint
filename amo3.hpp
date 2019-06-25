@@ -79,11 +79,11 @@ AD5544       amo3_VOUT_dac  (SPI_FLEX_AMO3_VOUT);
 //  Stepper Motor output
 uint16_t     stepper_motor_number       = 1;    //Tracks active stepper motor
 uint16_t     max_stepper_motor_number   = 12;
-int16_t      step_number                = 0;    //Step size counter
-uint16_t     max_step_number            = 5;
+int16_t      microstep_number           = 0;    //Step size counter
+int16_t      max_microstep_number       = 3;
 int16_t      max_steps                  = 2000;
-int16_t      step_array[12][6]           ;      //Holds total steps
-int16_t      move_array[12][6]           ;      //Holds steps to move
+int16_t      step_array[12][3]           ;      //Holds total steps
+int16_t      move_array[12][3]           ;      //Holds steps to move
 float        step_size                  = 1.8;
 float        stepper_voltage[6]         ;
 float        stepper_current[6]         ;
@@ -194,6 +194,10 @@ void amo3_init ()
   AMO6_EXT2_nEN_PORT &= ~_BV(AMO6_EXT2_nEN); //0
   AMO6_BUZZER_nEN_DDR  |=  _BV(AMO6_BUZZER_nEN); //output
   AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
+  
+  //motors init
+  DDRA = 0xff; //PORTA is shift register & DAC
+  DDRJ = 0x70; //J4-J7 are motor step output
   
   // hardware init
   amo3_VOUT_init(); //first call doesn't work
@@ -401,29 +405,71 @@ ISR(PCINT0_vect) //SW1 SW2
   sw2_old = sw2_now;
 }
 
+void motor_config(bool dir, int msn) {
+    PORTA &= ~(_BV(0));  //Reset shift registers
+    _delay_ms(1);
+    PORTA |= _BV(0);
+    uint16_t reg_input = 2115;//2^0(sleep)+2^1(rs3)+2^6(rs2)+2^11(rs1)
+    int shf;       //Shifts microstepping to appropriate pin output
+    switch(stepper_motor_number){
+        case 1:
+            shf= 14;
+            break;
+        case 2:
+            shf = 9;
+            break;
+        case 3:
+            shf = 5;
+            break;
+    }
+    reg_input |= (int(pow(2,msn)))<<shf;
+    reg_input |= dir<<(shf-1);
+    for (int i=0; i<=15; i++){
+        PORTA &= ~(_BV(1)); //Set shift & storage clocks to 0
+        PORTA &= ~(_BV(2));
+        if (reg_input & _BV(0)){
+            PORTA |= _BV(3);
+        }
+        else {
+            PORTA &= ~(_BV(3));
+        }
+        PORTA |= _BV(1);
+        PORTA |= _BV(2);
+    }
+}
+
 void move_motor (){
-  int d_step = 0;
-  //Set output to stepper drivers
-  for (int i = 0; i<=5; i++){
-      //Configure microstepping
-      d_step = step_array[stepper_motor_number-1][i]-move_array[stepper_motor_number-1][i];    //Calculate step difference
-      if (d_step<0){
-        //set negative direction
+  volatile uint8_t *port;
+  int step_shift;
+  switch (stepper_motor_number){ //Set output to stepper drivers
+      case 1:
+          step_shift = 4;
+          break;
+      case 2:
+          step_shift = 5;
+          break;    
+      case 3:
+          step_shift = 6;
+          break;
+  }
+  for (int i = 0; i<=max_microstep_number; i++){
+      int d_step = step_array[stepper_motor_number-1][i]-move_array[stepper_motor_number-1][i];    //step difference
+      if (d_step>0){
+        motor_config(true, i);
       }
-      for (int i = 0; i<abs(d_step); i++){
-        /*
-         port address = 1;
-         _delay_ms(8);
-         port address = 0;
-         */
+      else if (d_step<0) {
+        motor_config(false, i);
+      }
+      for (int i = 0; i<abs(d_step); i++){ //STEP motor d_step times
+         PORTJ &= _BV(step_shift);
+         _delay_ms(5);
+         PORTJ |= _BV(step_shift);
       }
       move_array[stepper_motor_number-1][i]=step_array[stepper_motor_number-1][i];
   }
-  
 }
 
-void amo6_buttons_update () 
-{
+void amo6_buttons_update () {
   static int tag_old = 0;
   int tag;
   float tmp;
@@ -503,10 +549,10 @@ void amo6_buttons_update ()
         case step_counter	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_array[stepper_motor_number-1][step_number] - 1;
+	  tmp = step_array[stepper_motor_number-1][microstep_number] - 1;
 	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<(max_steps*-1)) tmp=(max_steps*-1);
-	  step_array[stepper_motor_number-1][step_number] = tmp;
+	  step_array[stepper_motor_number-1][microstep_number] = tmp;
           break;
         case stepper_motor_counter         :
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -519,10 +565,10 @@ void amo6_buttons_update ()
         case fine_step_adjustment         :
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_number - 1;
-	  if (tmp>max_step_number) tmp=0;
-	  if (tmp<0) tmp=max_step_number;
-	  step_number = tmp;
+	  tmp = microstep_number - 1;
+	  if (tmp>max_microstep_number) tmp=0;
+	  if (tmp<0) tmp=max_microstep_number;
+	  microstep_number = tmp;
           break;
         }
         AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -570,10 +616,10 @@ void amo6_buttons_update ()
         case step_counter	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_array[stepper_motor_number-1][step_number] + 1;
+	  tmp = step_array[stepper_motor_number-1][microstep_number] + 1;
 	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<(max_steps*-1)) tmp=(max_steps*-1);
-	  step_array[stepper_motor_number-1][step_number] = tmp;
+	  step_array[stepper_motor_number-1][microstep_number] = tmp;
           break;
         case stepper_motor_counter         :
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -586,10 +632,10 @@ void amo6_buttons_update ()
         case fine_step_adjustment         :
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_number + 1;
-	  if (tmp>max_step_number) tmp=0;
-	  if (tmp<0) tmp=max_step_number;
-	  step_number = tmp;
+	  tmp = microstep_number + 1;
+	  if (tmp>max_microstep_number) tmp=0;
+	  if (tmp<0) tmp=max_microstep_number;
+	  microstep_number = tmp;
           break;
         }
         AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -638,10 +684,10 @@ void amo6_buttons_update ()
         case step_counter               	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_array[stepper_motor_number-1][step_number] + 10;
+	  tmp = step_array[stepper_motor_number-1][microstep_number] + 10;
 	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<(max_steps*-1)) tmp=(max_steps*-1);
-	  step_array[stepper_motor_number-1][step_number] = tmp;
+	  step_array[stepper_motor_number-1][microstep_number] = tmp;
           break;
         case stepper_motor_counter       	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -654,10 +700,10 @@ void amo6_buttons_update ()
         case fine_step_adjustment         :
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_number + 1;
-	  if (tmp>max_step_number) tmp=0;
-	  if (tmp<0) tmp=max_step_number;
-	  step_number = tmp;
+	  tmp = microstep_number + 1;
+	  if (tmp>max_microstep_number) tmp=0;
+	  if (tmp<0) tmp=max_microstep_number;
+	  microstep_number = tmp;
           break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -704,10 +750,10 @@ void amo6_buttons_update ()
         case step_counter	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_array[stepper_motor_number-1][step_number] - 10;
+	  tmp = step_array[stepper_motor_number-1][microstep_number] - 10;
 	  if (tmp>max_steps) tmp=max_steps;
 	  if (tmp<(max_steps*-1)) tmp=(max_steps*-1);
-	  step_array[stepper_motor_number-1][step_number] = tmp;
+	  step_array[stepper_motor_number-1][microstep_number] = tmp;
           break;
         case stepper_motor_counter       	:
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -720,10 +766,10 @@ void amo6_buttons_update ()
         case fine_step_adjustment         :
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(5);
-	  tmp = step_number - 1;
-	  if (tmp>max_step_number) tmp=0;
-	  if (tmp<0) tmp=max_step_number;
-	  step_number = tmp;
+	  tmp = microstep_number - 1;
+	  if (tmp>max_microstep_number) tmp=0;
+	  if (tmp<0) tmp=max_microstep_number;
+	  microstep_number = tmp;
           break;
       }
       AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
@@ -786,10 +832,10 @@ void amo6_buttons_update ()
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(1);
 	}
-	tmp = step_array[stepper_motor_number-1][step_number] + val/200.0;
+	tmp = step_array[stepper_motor_number-1][microstep_number] + val/200.0;
 	if (tmp>max_steps) tmp=max_steps;
 	if (tmp<(max_steps*-1)) tmp=(max_steps*-1);
-	step_array[stepper_motor_number-1][step_number] = tmp;
+	step_array[stepper_motor_number-1][microstep_number] = tmp;
         break;
       case stepper_motor_counter    	:
 	val = val/10;
@@ -808,10 +854,10 @@ void amo6_buttons_update ()
 	  AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
 	  _delay_ms(1);
 	}
-	tmp = step_number + val/200.0;
-	if (tmp>max_step_number) tmp=0;
-	if (tmp<0) tmp=max_step_number;
-	step_number = tmp;
+	tmp = microstep_number + val/200.0;
+	if (tmp>max_microstep_number) tmp=0;
+	if (tmp<0) tmp=max_microstep_number;
+	microstep_number = tmp;
         break;
     }
     if ((val<=-1)||(val>=1)) {
@@ -1060,7 +1106,7 @@ void amo6_screen_draw ()
   CleO.Tag(move_button);
   CleO.RectangleColor(MY_GREEN);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%d", move_array[stepper_motor_number-1][step_number]);
+  sprintf(text_buf, "%d", move_array[stepper_motor_number-1][microstep_number]);
   CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVE");
   
   //Coarse Steps
@@ -1068,7 +1114,7 @@ void amo6_screen_draw ()
   CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
   double total_angle=0;
-  for (int i=0;i<=5;i++){
+  for (int i=0;i<=max_microstep_number;i++){
       total_angle +=step_array[stepper_motor_number-1][i]*(step_size/pow(2,i));
   }
   sprintf(text_buf, "%.1f", total_angle);
@@ -1085,7 +1131,7 @@ void amo6_screen_draw ()
   CleO.Tag(step_counter);
   CleO.RectangleColor(amo6_screen_select[step_counter] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "%d", step_array[stepper_motor_number-1][step_number]);
+  sprintf(text_buf, "%d", step_array[stepper_motor_number-1][microstep_number]);
   CleO.StringExt(FONT_SANS_5, 248, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_SANS_2, 280, 40+8, amo6_screen_text_color, MM, 0, 0, "steps");
   
@@ -1093,9 +1139,9 @@ void amo6_screen_draw ()
   CleO.Tag(fine_step_adjustment);
   CleO.RectangleColor(amo6_screen_select[fine_step_adjustment] ? CLEO_SELECT : MY_WHITE);
   CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-  sprintf(text_buf, "1/%.f ", pow(2,step_number));
+  sprintf(text_buf, "1/%.f ", pow(2,microstep_number));
   CleO.StringExt(FONT_SANS_6, 240, 120, amo6_screen_text_color, MM, 0, 0, text_buf);
-  sprintf(text_buf, "%.3f", step_size/pow(2,step_number));
+  sprintf(text_buf, "%.3f", step_size/pow(2,microstep_number));
   CleO.StringExt(FONT_SANS_1, 305, 150, amo6_screen_text_color, MR, 0, 0, text_buf);
   CleO.StringExt(FONT_TINY, 306, 142, amo6_screen_text_color, ML, 0, 0, " o");
   
@@ -1229,7 +1275,7 @@ void amo6_screen_processShortPress () {
       _delay_ms(5);
       for(i=0;i<calibrate_button;i++) amo6_screen_select[i]=0;
       for(i=calibrate_button+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-      for (i=0; i<=5; i++){ //reset step array of given motor
+      for (i=0; i<=max_microstep_number; i++){ //reset step array of motor
         move_array[stepper_motor_number-1][i] = 0;
         step_array[stepper_motor_number-1][i] = 0;
       }
