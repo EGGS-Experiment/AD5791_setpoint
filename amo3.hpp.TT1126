@@ -1138,7 +1138,6 @@ void amo6_screen_processShortPress () {
 
 //Motors (AMO7)
 void dac_init(){
-    /*
     int init_input = 1;              //command code 0001 (power up DAC n)
     init_input |= 7 <<4; //address command
     PORTA &= ~(_BV(4));         //CS/LD high to begin serial input
@@ -1159,11 +1158,9 @@ void dac_init(){
         stepper_dac_update();
     }
     stepper_motor_number = 0;
-    */
 }
 
 void motor_config(bool dir, int msn) {
-    /*
     PORTA &= ~(_BV(0));  //Reset shift registers
     _delay_ms(1);
     PORTA |= _BV(0);
@@ -1198,11 +1195,9 @@ void motor_config(bool dir, int msn) {
         PORTA |= _BV(2);
         reg_input >>= 1;
     }
-    */
 }
 
 void move_motor (){
-    /*
   int step_shift;
   switch (stepper_motor_number % 3){ //Set output to stepper drivers
       case 0:
@@ -1230,11 +1225,9 @@ void move_motor (){
       }
       move_array[stepper_motor_number][i]=step_array[stepper_motor_number][i];
   }
-  */
 }
 
 void stepper_dac_update () {
-    /*
     uint32_t dac_input = 3;     //command code 0011
     int board_num = (stepper_motor_number-(stepper_motor_number%3))/3;
     int address_code = (int) pow(2,(stepper_motor_number)%3);
@@ -1254,7 +1247,6 @@ void stepper_dac_update () {
         dac_input >>= 1;
     }
     PORTA |= _BV(4); 
-    */
 }
 
 
