@@ -165,7 +165,8 @@ bool         stepper_enable [12]        = {false, false, false, false, false, fa
 void dac_init               ();
 void motor_config           (bool dir, int msn);
 void move_motor             ();
-void stepper_dac_update    ();
+void stepper_dac_update     ();
+void board_config           ();
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Implementation
@@ -196,6 +197,7 @@ void amo3_init ()
   DDRA = 0xff; //PORTA is shift register & DAC
   DDRJ = 0xf0; //J4-J7 are motor step output
   DDRC = 0x0f; //C0-C3 output, C4-C7 input
+  PORTA = 0x91;
   
   // hardware init
   amo3_VOUT_init(); //first call doesn't work
@@ -1138,21 +1140,21 @@ void amo6_screen_processShortPress () {
 
 //Motors (AMO7)
 void dac_init(){
-    int init_input = 8;             //command code 0001 in reverse
-    init_input |= (7 << 4);         //all dac address code
-    PORTA &= ~(_BV(4));             //CS/LD high to begin serial input
+    uint32_t init_input = 8;         //command code 0001 in reverse
+    init_input |= (15 << 4);         //all dac address code
+    PORTA &= ~(_BV(4));              //CS/LD low to begin serial input
     for (int i=0; i<=23; i++){
-        PORTA &= ~(_BV(5)); //Set dac clock to 0
+        PORTA &= ~(_BV(5));         //set dac clock to 0
         if (init_input & _BV(0)){
             PORTA |= _BV(6);
         }
         else {
-        PORTA &= ~(_BV(6));
+            PORTA &= ~(_BV(6));
         }
         PORTA |= _BV(5);
-        init_input >>= 1;
+        init_input >>= 1;           //set dac clock to 1
     }
-    PORTA |= _BV(4);            //CS/LD low to finish serial input
+    PORTA |= _BV(4);            //CS/LD high to finish serial input
     for (int i=0; i<= 11; i++){ //update saved voltage values
         stepper_motor_number = i;
         stepper_dac_update();
@@ -1166,8 +1168,7 @@ void motor_config(bool dir, int msn) {
     PORTA |= _BV(0);
     uint16_t reg_input = 2115;//2^0(sleep)+2^1(rs3)+2^6(rs2)+2^11(rs1)
     int ms_shift;       //Shifts microstepping to appropriate pin output
-    int board_num = (stepper_motor_number-(stepper_motor_number%3))/3;
-    PORTC &= (0xf0+ ~(_BV(board_num))); //config board #
+    board_config();
     switch(stepper_motor_number % 3){
         case 0:
             ms_shift = 14;
@@ -1228,36 +1229,39 @@ void move_motor (){
 }
 
 void stepper_dac_update () {
-    uint32_t dac_input = 12;     //command code 0011 in reverse
-    int board_num = (stepper_motor_number-(stepper_motor_number%3))/3;
-    int address_code = 0;
-    switch (stepper_motor_number % 3){
-        case 0:
-            address_code = 0;
-            break;
-        case 1:
-            address_code = 4;
-            break;
-        case 2:
-            address_code = 2;
-            break;
-    }
-    PORTC &= (0xf0 + ~(_BV(board_num))); //config board #
-    dac_input |= address_code << 4; //address command
-    dac_input |= stepper_voltage[stepper_motor_number]<< 8;
-    PORTA &= ~(_BV(4));         //CS/LD high to begin serial input
-    for (int i=0; i<=23; i++){
-        PORTA &= ~(_BV(5)); //Set dac clock to 0
-        if (dac_input & _BV(0)){
+    uint16_t dac_input = 0x3000;    //command code 0011
+    uint8_t address_code = 2*(stepper_motor_number % 3);
+    board_config();
+    dac_input |= address_code << 8; //address command
+    dac_input |= stepper_voltage[stepper_motor_number];
+    PORTA &= ~(_BV(4));             //CS/LD high to begin serial input
+    for (int i=0; i<=15; i++){
+        PORTA &= ~(_BV(5));         //Set dac clock to 0
+        if (dac_input & _BV(15)){
             PORTA |= _BV(6);
         }
         else {
             PORTA &= ~(_BV(6));
         }
         PORTA |= _BV(5);
-        dac_input >>= 1;
+        dac_input <<= 1;
+    }
+            PORTA &= ~(_BV(6));
+    for (int i=0; i<=16; i++){
+        PORTA &= ~(_BV(5))
+        _delay_ms(1);
+        PORTA &= ~(_BV(5))
+        _delay_ms(1);
     }
     PORTA |= _BV(4);            //CS/LD low to finish serial input
+}
+
+void board_config() {
+    uint8_t board_num = (stepper_motor_number-(stepper_motor_number%3))/3;
+    int c_config = 0xf0;
+    c_config &= PORTC;
+    c_config |= ~(_BV(board_num));
+    PORTC = c_config; //config board #
 }
 
 
