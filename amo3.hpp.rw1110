@@ -151,7 +151,7 @@ void  amo6_screen_shortPress         (bool *press_detected);
 void  amo6_screen_processShortPress  ();
 
 //Stepper Motors (AMO7)
-int          stepper_motor_number       = 0;    //Tracks active stepper motor
+uint16_t     stepper_motor_number       = 0;    //Tracks active stepper motor
 uint16_t     max_stepper_motor_number   = 11;
 int16_t      microstep_number           = 0;    //Step size counter
 int16_t      max_microstep_number       = 3;
@@ -159,7 +159,7 @@ int16_t      max_steps                  = 2000;
 int16_t      step_array[12][3]           ;      //Holds total steps
 int16_t      move_array[12][3]           ;      //Holds steps to move
 float        step_size                  = 1.8;
-int          stepper_voltage[12]        = {0,0,0,0,0,0,0,0,0,0,0,0}         ;
+int          stepper_voltage[12]         ;
 bool         stepper_enable [12]        = {false, false, false, false, false, false, false, false, false, false, false, false};
 
 void dac_init               ();
@@ -196,7 +196,7 @@ void amo3_init ()
   //motors init (AMO7)
   DDRA = 0xff; //PORTA is shift register & DAC
   DDRJ = 0xf0; //J4-J7 are motor step output
-  DDRC = 0x0f; //C0-C3 en/dis-able digital isolators, C4-C7 motor feedback
+  DDRC = 0x0f; //C0-C3 output, C4-C7 input
   PORTA = 0x91;
   
   // hardware init
@@ -1185,6 +1185,7 @@ void motor_config(bool dir, int msn) {
     reg_input |= ~(stepper_enable[stepper_motor_number])<<(ms_shift-2);
     for (int i=0; i<=15; i++){
         PORTA &= ~(_BV(1)); //Set shift & storage clocks to 0
+        PORTA &= ~(_BV(2));
         if (reg_input & _BV(0)){
             PORTA |= _BV(3);
         }
@@ -1192,11 +1193,9 @@ void motor_config(bool dir, int msn) {
             PORTA &= ~(_BV(3));
         }
         PORTA |= _BV(1);
+        PORTA |= _BV(2);
         reg_input >>= 1;
     }
-    PORTA |= _BV(2);
-    _delay_ms(1);
-    PORTA &= 0xf1;  
 }
 
 void move_motor (){
@@ -1221,13 +1220,12 @@ void move_motor (){
         motor_config(false, i);
       }
       for (int i = 0; i<abs(d_step); i++){ //STEP motor d_step times
-         PORTJ |= _BV(step_shift);
+         PORTJ &= _BV(step_shift);
          _delay_ms(5);
-         PORTJ &= ~(_BV(step_shift));
+         PORTJ |= _BV(step_shift);
       }
       move_array[stepper_motor_number][i]=step_array[stepper_motor_number][i];
   }
-    PORTJ &= _BV(step_shift);
 }
 
 void stepper_dac_update () {
@@ -1236,7 +1234,7 @@ void stepper_dac_update () {
     board_config();
     dac_input |= address_code << 8;
     dac_input |= stepper_voltage[stepper_motor_number];
-    PORTA &= ~(_BV(4));             //CS/LD low to begin serial input
+    PORTA &= ~(_BV(4));             //CS/LD high to begin serial input
     for (int i=0; i<=15; i++){
         PORTA &= ~(_BV(5));         //Set dac clock to 0
         if (dac_input & _BV(15)){
@@ -1248,22 +1246,22 @@ void stepper_dac_update () {
         PORTA |= _BV(5);
         dac_input <<= 1;
     }
-    PORTA &= ~(_BV(6));             
-    for (int i=0; i<=7; i++){           
-        PORTA &= ~(_BV(5));
+            PORTA &= ~(_BV(6));
+    for (int i=0; i<=16; i++){
+        PORTA &= ~(_BV(5))
         _delay_ms(1);
-        PORTA &= ~(_BV(5));
+        PORTA &= ~(_BV(5))
         _delay_ms(1);
     }
-    PORTA |= _BV(4);            //CS/LD high to finish serial input
+    PORTA |= _BV(4);            //CS/LD low to finish serial input
 }
 
 void board_config() {
     uint8_t board_num = (stepper_motor_number-(stepper_motor_number%3))/3;
-    uint8_t c_config = PORTC;    //C4-C7 are input, so maintain their values
-    c_config |= 0x0f;
-    c_config &= ~(_BV(board_num));
-    PORTC = c_config;           
+    uint8_t c_config = 0xf0;    //C4-C7 are input, so maintain their values
+    c_config &= PORTC;
+    c_config |= ~(_BV(board_num));
+    PORTC = c_config; //config board #
 }
 
 

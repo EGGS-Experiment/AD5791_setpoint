@@ -151,7 +151,7 @@ void  amo6_screen_shortPress         (bool *press_detected);
 void  amo6_screen_processShortPress  ();
 
 //Stepper Motors (AMO7)
-int          stepper_motor_number       = 0;    //Tracks active stepper motor
+uint16_t     stepper_motor_number       = 0;    //Tracks active stepper motor
 uint16_t     max_stepper_motor_number   = 11;
 int16_t      microstep_number           = 0;    //Step size counter
 int16_t      max_microstep_number       = 3;
@@ -196,7 +196,7 @@ void amo3_init ()
   //motors init (AMO7)
   DDRA = 0xff; //PORTA is shift register & DAC
   DDRJ = 0xf0; //J4-J7 are motor step output
-  DDRC = 0x0f; //C0-C3 en/dis-able digital isolators, C4-C7 motor feedback
+  DDRC = 0x0f; //C0-C3 output, C4-C7 input
   PORTA = 0x91;
   
   // hardware init
@@ -1196,7 +1196,7 @@ void motor_config(bool dir, int msn) {
     }
     PORTA |= _BV(2);
     _delay_ms(1);
-    PORTA &= 0xf1;  
+    PORTA &= ~(_BV(2));
 }
 
 void move_motor (){
