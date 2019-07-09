@@ -161,7 +161,6 @@ int16_t      move_array[12][3]           ;      //Holds steps to move
 float        step_size                  = 1.8;
 int          stepper_voltage[12]        = {0,0,0,0,0,0,0,0,0,0,0,0}         ;
 bool         stepper_enable [12]        = {false, false, false, false, false, false, false, false, false, false, false, false};
-bool         old_dir                    = false;
 
 void dac_init               ();
 void motor_config           (bool dir, int msn);
@@ -935,13 +934,6 @@ void amo6_screen_draw ()
     
     //Move Button
     CleO.Tag(move_button);
-    /*bool move_color = false;
-    for (int c = 0; c <= max_microstep_number; c++){
-        if ((step_array[stepper_motor_number][c] - move_array[stepper_motor_number][c]) != 0){
-            move_color = true;
-        }
-    }
-    CleO.RectangleColor(move_color ? MY_GREEN : MY_RED); */
     CleO.RectangleColor(MY_GREEN);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
     sprintf(text_buf, "%d", move_array[stepper_motor_number][microstep_number]);
@@ -1189,12 +1181,13 @@ void motor_config(bool dir, int msn) {
     }
     reg_input |= msn<<ms_shift;
     reg_input |= dir<<(ms_shift-1);
-    reg_input |= 0x1084;
-    if (stepper_enable[stepper_motor_number]){  //enables only selected motor
+    reg_input |= 0x1084;    //enables only selected motor
+    if (stepper_enable[stepper_motor_number]){
         reg_input &= ~(_BV(ms_shift-2)); 
     }
+    reg_input |= toggle;
     for (int i=0; i<=15; i++){
-        PORTA &= ~(_BV(1));         //Set shift & storage clocks to 0
+        PORTA &= ~(_BV(1)); //Set shift & storage clocks to 0
         if (reg_input & _BV(0)){
             PORTA |= _BV(3);
         }
@@ -1225,20 +1218,14 @@ void move_motor (){
         int d_step = step_array[stepper_motor_number][i]-move_array[stepper_motor_number][i];    //step difference
         if (d_step>0){
             motor_config(true, i);
-            old_dir = true;
         }
         else if (d_step<0) {
             motor_config(false, i);
-            old_dir = false;
         }
-        else if (d_step == 0 && i == 0) {
-            motor_config(old_dir, i);
-            if (old_dir){
-                step_array[stepper_motor_number][microstep_number] += 1;
-            }
-            else {
-                step_array[stepper_motor_number][microstep_number] -= 1;
-            }
+        else if (d_step == 0){
+            motor_config(false, i);
+            d_step = 1;
+            step_array[stepper_motor_number][0] += 1;
         }
         for (int i = 0; i<abs(d_step); i++){ //STEP motor d_step times
             PORTJ |= _BV(step_shift);
