@@ -156,11 +156,11 @@ uint16_t     max_stepper_motor_number   = 11;
 int16_t      microstep_number           = 0;    //Step size counter
 int16_t      max_microstep_number       = 3;
 int16_t      max_steps                  = 2000;
-int16_t      step_array[12][3]           ;      //Holds total steps
-int16_t      move_array[12][3]           ;      //Holds steps to move
+int16_t      step_array[12][4]           ;      //Holds total steps
+int16_t      move_array[12][4]           ;      //Holds steps to move
 float        step_size                  = 1.8;
 int          stepper_voltage[12]        = {0,0,0,0,0,0,0,0,0,0,0,0}         ;
-bool         stepper_enable [12]        = {false, false, false, false, false, false, false, false, false, false, false, false};
+bool         stepper_enable [12]        = {0,0,0,0,0,0,0,0,0,0,0,0};
 bool         old_dir                    = false;
 
 void dac_init               ();
@@ -207,7 +207,9 @@ void amo3_init ()
     amo3_load_state();
     amo3_VOUT_init(); //need this second call to reset properly
     _delay_ms(100);   //just in case, to prevent "power-on reset glitch"
+    PORTC = 0x00;
     dac_init(); //AMO7
+    board_config();
     _delay_ms(5000);
 }
 
@@ -936,12 +938,12 @@ void amo6_screen_draw ()
     //Move Button
     CleO.Tag(move_button);
     /*bool move_color = false;
-    for (int c = 0; c <= max_microstep_number; c++){
-        if ((step_array[stepper_motor_number][c] - move_array[stepper_motor_number][c]) != 0){
-            move_color = true;
+     *    for (int c = 0; c <= max_microstep_number; c++){
+     *        if ((step_array[stepper_motor_number][c] - move_array[stepper_motor_number][c]) != 0){
+     *            move_color = true;
+           }
         }
-    }
-    CleO.RectangleColor(move_color ? MY_GREEN : MY_RED); */
+CleO.RectangleColor(move_color ? MY_GREEN : MY_RED); */
     CleO.RectangleColor(MY_GREEN);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
     sprintf(text_buf, "%d", move_array[stepper_motor_number][microstep_number]);
@@ -1150,7 +1152,7 @@ void amo6_screen_processShortPress () {
 void dac_init(){
     uint32_t init_input = 8;         //command code 0001 in reverse
     init_input |= (15 << 4);         //all dac address code
-    PORTA &= ~(_BV(4));              //CS/LD low to begin serial input
+    PORTA &= ~(_BV(4));             //CS/LD low to begin serial input
     for (int i=0; i<=23; i++){
         PORTA &= ~(_BV(5));         //set dac clock to 0
         if (init_input & _BV(0)){
@@ -1162,12 +1164,33 @@ void dac_init(){
         PORTA |= _BV(5);
         init_input >>= 1;           //set dac clock to 1
     }
-    PORTA |= _BV(4);            //CS/LD high to finish serial input
-    for (int i=0; i<= 11; i++){ //update saved voltage values
-        stepper_motor_number = i;
-        stepper_dac_update();
+    PORTA |= _BV(4);                //CS/LD high to finish serial input 
+    /*
+    //Set PFD = 0.4*VDD
+    for(int i = 0; i<=2; i++){
+        init_input = 0x3000;    //command code 0011 + PFD
+        init_input |= (1+2*i) << 8;
+        PORTA &= ~(_BV(4));             //CS/LD low to begin serial input
+        for (int j=0; j<=15; i++){
+            PORTA &= ~(_BV(5));         //Set dac clock to 0
+            if (dac_input & _BV(15)){
+                PORTA |= _BV(6);        
+            }
+            else {
+                PORTA &= ~(_BV(6));
+            }
+            PORTA |= _BV(5);
+            dac_input <<= 1;
+        }
+        PORTA &= ~(_BV(6));             
+        for (int j=0; j<=7; i++){           
+            PORTA &= ~(_BV(5));
+            PORTA |= _BV(5);
+        }
+        PORTA |= _BV(4);            //CS/LD high to finish serial input
     }
-    stepper_motor_number = 0;
+    //finish PFD input
+    */
 }
 
 void motor_config(bool dir, int msn) {
@@ -1210,6 +1233,9 @@ void motor_config(bool dir, int msn) {
 
 void move_motor (){
     int step_shift;
+    int d_array[12][4];
+    int rounding_steps = 0;
+    bool detect_movement = false;
     switch (stepper_motor_number % 3){ //Set output to stepper drivers
         case 0:
             step_shift = 4;
@@ -1222,32 +1248,49 @@ void move_motor (){
             break;
     }
     for (int i = 0; i<=max_microstep_number; i++){
-        int d_step = step_array[stepper_motor_number][i]-move_array[stepper_motor_number][i];    //step difference
-        if (d_step>0){
-            motor_config(true, i);
+        d_array[stepper_motor_number][i] = step_array[stepper_motor_number][i]-move_array[stepper_motor_number][i];
+        rounding_steps += step_array[stepper_motor_number][i]*8/pow(2,i);
+        if (d_array[stepper_motor_number][i] != 0){
+            detect_movement = true;
+        }
+    }
+    if (detect_movement){       //move to nearest full step
+        rounding_steps %= 8;
+        motor_config(true, 3);
+        for (int i = 0; i<abs(rounding_steps); i++){
+            PORTJ |= _BV(step_shift);
+            _delay_ms(5);
+            PORTJ &= ~(_BV(step_shift));
+        }
+    }                           //step motor
+    for (int i = 0; i<=max_microstep_number; i++){
+        if ((d_array[stepper_motor_number][i]>0) && (detect_movement == true)){
             old_dir = true;
         }
-        else if (d_step<0) {
-            motor_config(false, i);
+        else if ((d_array[stepper_motor_number][i]<0) && (detect_movement == true)) {
             old_dir = false;
         }
-        else if (d_step == 0 && i == 0) {
-            motor_config(old_dir, i);
-            if (old_dir){
-                step_array[stepper_motor_number][microstep_number] += 1;
-            }
-            else {
-                step_array[stepper_motor_number][microstep_number] -= 1;
-            }
+        else if ((i == microstep_number) && (detect_movement == false)) {
+            int temp = old_dir? 1:-1;
+            d_array[stepper_motor_number][i] += temp;
+            step_array[stepper_motor_number][microstep_number] += temp;
         }
-        for (int i = 0; i<abs(d_step); i++){ //STEP motor d_step times
+        motor_config(old_dir, i);
+        for (int j = 0; j<abs(d_array[stepper_motor_number][i]); j++){
             PORTJ |= _BV(step_shift);
             _delay_ms(5);
             PORTJ &= ~(_BV(step_shift));
         }
         move_array[stepper_motor_number][i]=step_array[stepper_motor_number][i];
     }
-    PORTJ &= _BV(step_shift);
+    if (detect_movement){       //move back to original offset from full step
+        motor_config(false, 3);
+        for (int i = 0; i<abs(rounding_steps); i++){
+            PORTJ |= _BV(step_shift);
+            _delay_ms(5);
+            PORTJ &= ~(_BV(step_shift));
+        }
+    }
 }
 
 void stepper_dac_update () {
