@@ -41,64 +41,83 @@
 
 
 int main(void) {
-  // ////////////////////////////////////////////////////////////////////////
-  // initialization
-  // ////////////////////////////////////////////////////////////////////////
-  
-  // LED
-  led_init();
-
-  // initialize serial console and redirect printf(), getchar() etc. to it
-  serial_console_init();  // enables interrupt!
-  
-  // AMO3
-  amo3_init();
-
-  // ////////////////////////////////////////////////////////////////////////
-  // boot indicator
-  // ////////////////////////////////////////////////////////////////////////
-
-  led_blink(3);
-  led_on();
-
-  // ////////////////////////////////////////////////////////////////////////
-  // finally: turn on interrupts
-  // ////////////////////////////////////////////////////////////////////////
-
-  sei();
-
-  // ////////////////////////////////////////////////////////////////////////
-  // main program loop
-  // ////////////////////////////////////////////////////////////////////////
-
-  // give status message
-  printf("%s\n", device_name);
-  printf("Device ID : %s\n", device_id);
-  printf("Hardware ID : %s\n", hardware_id);
-  printf("Firmware ID : %s\n", firmware_id);
-  printf("Device Ready\n");
-  
-  uint16_t counter=0;
-  bool no_op=1;
-  for (;;) {
-    if (counter%90==0) {
-      amo3_fault_check();
-      no_op=0;
+    // ////////////////////////////////////////////////////////////////////////
+    // initialization
+    // ////////////////////////////////////////////////////////////////////////
+    
+    // LED
+    led_init();
+    
+    // initialize serial console and redirect printf(), getchar() etc. to it
+    serial_console_init();  // enables interrupt!
+    
+    // AMO3
+    amo3_init();
+    
+    // ////////////////////////////////////////////////////////////////////////
+    // boot indicator
+    // ////////////////////////////////////////////////////////////////////////
+    
+    led_blink(3);
+    led_on();
+    
+    // ////////////////////////////////////////////////////////////////////////
+    // finally: turn on interrupts
+    // ////////////////////////////////////////////////////////////////////////
+    
+    sei();
+    
+    // ////////////////////////////////////////////////////////////////////////
+    // main program loop
+    // ////////////////////////////////////////////////////////////////////////
+    
+    // give status message
+    printf("%s\n", device_name);
+    printf("Device ID : %s\n", device_id);
+    printf("Hardware ID : %s\n", hardware_id);
+    printf("Firmware ID : %s\n", firmware_id);
+    printf("Device Ready\n");
+    
+    uint16_t counter=0;
+    /*uint8_t  motor_counter = 0;
+    uint8_t  microstep_counter = 0;*/
+    bool no_op=1;
+    for (;;) {
+        /*if (counter%3==0) {
+            if (step_queue[0] != 0){
+                if (new_motor){
+                    move_config();
+                }
+                if (new_ms){
+                    motor_config();
+                }
+                if (need_to_step){
+                    move_motor(step_queue[motor_counter], 1);
+                    move_array[step_queue[motor_counter]][microstep_counter] -= 1;
+                }
+                if (end_of_motor){
+                    forward_step_queue();
+                }
+            }
+        }*/
+        if (counter%90==0) {
+            amo3_fault_check();
+            no_op=0;
+        }
+        if (counter%100==0) {
+            amo6_buttons_update();
+            amo6_serial_update();
+            amo6_screen_update();
+            no_op=0;
+        }
+        if (counter%250==0) {
+            amo3_hardware_update();
+            no_op=0;
+        }
+        if (no_op) _delay_ms(1);
+        else no_op=1;
+        counter++;
     }
-    if (counter%100==0) {
-      amo6_buttons_update();
-      amo6_serial_update();
-      amo6_screen_update();
-      no_op=0;
-    }
-    if (counter%250==0) {
-      amo3_hardware_update();
-      no_op=0;
-    }
-    if (no_op) _delay_ms(1);
-    else no_op=1;
-    counter++;
-  }
-
-  return 0;
+    
+    return 0;
 }
