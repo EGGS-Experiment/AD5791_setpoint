@@ -1237,6 +1237,10 @@ void background_stepping (){
             microstep_counter += 1;
             new_ms = true;
         }
+        else if (move_array[step_queue[0]][microstep_counter] != 0){
+            move_motor(step_queue[0], 1);
+            move_array[step_queue[0]][microstep_counter] += dir_arr[microstep_counter]? -1:1;
+        }
         else if (move_array[step_queue[0]][microstep_counter] == 0 && microstep_counter >= 3){
             microstep_counter = 0;
             for (int k = 0; k < max_microstep_number; k++){
@@ -1247,11 +1251,6 @@ void background_stepping (){
                 step_queue[i-1] = step_queue[i];
             }
             queue_index -= 1;
-        }
-        else if (move_array[step_queue[0]][microstep_counter] != 0){
-            int temp = dir_arr[microstep_counter]? -1:1;
-            move_motor(step_queue[0], 1);
-            move_array[step_queue[0]][microstep_counter] += temp;
         }
     }
 }
