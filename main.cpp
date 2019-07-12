@@ -79,27 +79,12 @@ int main(void) {
     printf("Device Ready\n");
     
     uint16_t counter=0;
-    /*uint8_t  motor_counter = 0;
-    uint8_t  microstep_counter = 0;*/
     bool no_op=1;
     for (;;) {
-        /*if (counter%3==0) {
-            if (step_queue[0] != 0){
-                if (new_motor){
-                    move_config();
-                }
-                if (new_ms){
-                    motor_config();
-                }
-                if (need_to_step){
-                    move_motor(step_queue[motor_counter], 1);
-                    move_array[step_queue[motor_counter]][microstep_counter] -= 1;
-                }
-                if (end_of_motor){
-                    forward_step_queue();
-                }
-            }
-        }*/
+        if (counter%3==0) {
+            background_stepping();
+            no_op = 0;
+        }
         if (counter%90==0) {
             amo3_fault_check();
             no_op=0;
