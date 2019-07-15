@@ -81,7 +81,7 @@ int main(void) {
     uint16_t counter=0;
     bool no_op=1;
     for (;;) {
-        if (counter%3==0) {
+        if (counter%4==0) {
             background_stepping();
             no_op = 0;
         }

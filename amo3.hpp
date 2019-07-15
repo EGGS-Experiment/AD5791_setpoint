@@ -1228,10 +1228,10 @@ void stepper_dac_update () {
 }
 
 void background_stepping (){
-    if (step_queue[0] != 0){
+    if (queue_index != 0){
         if (new_ms){
             motor_config(step_queue[0], dir_arr[microstep_counter],microstep_counter);
-            new_ms = false;
+            new_ms = false;//goes to next and goes true and keeps toggling
         }
         if (move_array[step_queue[0]][microstep_counter] == 0 && (microstep_counter < 3)) {
             microstep_counter += 1;
@@ -1247,6 +1247,7 @@ void background_stepping (){
                 step_queue[i-1] = step_queue[i];
             }
             queue_index -= 1;
+            new_ms = true;
         }
         else if (move_array[step_queue[0]][microstep_counter] != 0){
             int temp = dir_arr[microstep_counter]? -1:1;
@@ -1265,27 +1266,20 @@ void board_config(int motor_num) {
 }
 
 void motor_config(int motor_num, bool dir, int msn) {
-    PORTA &= ~(_BV(0));  //Reset shift registers
+    PORTA &= ~(_BV(0));                     //Reset shift registers
     PORTA |= _BV(0);
-    uint16_t reg_input = 2115;  //2^0(sleep)+2^1(rs3)+2^6(rs2)+2^11(rs1)
-    int ms_shift;               //Shifts microstepping to appropriate pin output   
+    uint16_t reg_input = 2115;              //2^0(sleep)+2^1(rs3)+2^6(rs2)+2^11(rs1)
+    int ms_shift = 14 - 5*(motor_num % 3);  //Shifts microstepping to appropriate pin output   
     board_config(motor_num);
-    switch(motor_num % 3){
-        case 0:
-            ms_shift = 14;
-            break;
-        case 1:
-            ms_shift = 9;
-            break;
-        case 2:
-            ms_shift = 4;
-            break;
-    }
     reg_input |= msn<<ms_shift;
     reg_input |= dir<<(ms_shift-1);
     reg_input |= 0x1084;
-    if (stepper_enable[motor_num]){  //enables only selected motor
-        reg_input &= ~(_BV(ms_shift-2)); 
+    int board_num_min = motor_num-(motor_num%3);
+    for (int i = board_num_min; i <= board_num_min+2; i++){
+        if (stepper_enable[i]){             //enables motors switched on within board
+            int on_off_shift = 12-5*(i%3);
+            reg_input &= ~(_BV(on_off_shift)); 
+        }
     }
     for (int i=0; i<=15; i++){
         PORTA &= ~(_BV(1));         //Set shift & storage clocks to 0
@@ -1305,8 +1299,6 @@ void motor_config(int motor_num, bool dir, int msn) {
 void move_config (){
     int rounding_steps = 0;
     bool detect_movement = false;
-    step_queue[queue_index] = stepper_motor_number; 
-    queue_index += 1;
     for (int i = 0; i<=max_microstep_number; i++){
         move_array[stepper_motor_number][i] = step_array[stepper_motor_number][i]-move_array[stepper_motor_number][i];
         rounding_steps += step_array[stepper_motor_number][i]*8/pow(2,i);
@@ -1314,39 +1306,18 @@ void move_config (){
             detect_movement = true;
         }
     }
+    if (!detect_movement){
+        return;
+    }
+    step_queue[queue_index] = stepper_motor_number; 
+    queue_index += 1;
     rounding_steps %= 8;
-    if (detect_movement){ //move to full step
-        motor_config(stepper_motor_number, true, 3);
-        move_motor(stepper_motor_number, abs(rounding_steps));
-    }
-    else if ((microstep_number != 3) && (rounding_steps != 0)){
-        move_array[stepper_motor_number][3] += rounding_steps;
-        step_array[stepper_motor_number][3] += rounding_steps;
-    }
+    bool round_dir = rounding_steps > 0? false:true;
+    motor_config(stepper_motor_number, round_dir, 3);
+    move_motor(stepper_motor_number, abs(rounding_steps));  //move to nearest full step
+    move_array[stepper_motor_number][3] += rounding_steps;
     for (int i = 0; i<=max_microstep_number; i++){
-        if ((move_array[stepper_motor_number][i]>0) && (detect_movement == true)){
-            old_dir = true;
-        }
-        else if ((move_array[stepper_motor_number][i]<0) && (detect_movement == true)) {
-            old_dir = false;
-        }
-        else if ((i == microstep_number) && (detect_movement == false)) {
-            int temp = old_dir? 1:-1;
-            move_array[stepper_motor_number][i] += temp;
-            step_array[stepper_motor_number][microstep_number] += temp;
-        }
-        dir_arr[i] = old_dir;
-        //motor_config(stepper_motor_number, old_dir, i);
-        //move_motor(stepper_motor_number, abs(move_array[stepper_motor_number][i]));
-        //move_array[stepper_motor_number][i]=step_array[stepper_motor_number][i];
-    }
-    if (detect_movement){       //move back to original offset from full step
-        //motor_config(stepper_motor_number, false, 3);
-        //move_motor(stepper_motor_number, abs(rounding_steps));
-        move_array[stepper_motor_number][3] -= rounding_steps;
-        if (move_array[stepper_motor_number][3] <0){
-            dir_arr[3] = 0;
-        }
+        dir_arr[i] = move_array[stepper_motor_number][i]>0 ? true:false;
     }
 }
 
