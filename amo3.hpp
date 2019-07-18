@@ -182,11 +182,15 @@ int          queued_microstep_counter   = 0;
 bool         move_enable[12]            = {1,1,1,1,1,1,1,1,1,1,1,1};
 
 void dac_init               ();
+void pfd_update             (int motor_num);
 void stepper_dac_update     ();
 void board_config           (int motor_num);
 void motor_config           (int motor_num, bool dir, int msn);
 void move_config            ();
 void move_motor             (int motor_num, int steps);
+
+
+void debug_move             ();
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Implementation
@@ -1176,55 +1180,38 @@ void dac_init(){
         PORTA |= _BV(AMO7_DAC_CLOCK);
         init_input >>= 1;                       //set dac clock to 1
     }
-    /*
+    
     PORTA |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input 
-    init_input = 94;
-    init_input |= 0x3000;
-    init_input |= 1 << 8;
-    PORTA &= ~(_BV(4));            
-    for (int j=0; j<=15; j++){
-        PORTA &= ~(_BV(5));  
-        if (init_input & _BV(15)){
-            PORTA |= _BV(6);        
+    _delay_ms(100);
+    for (int i = 0; i<= 11; i++){
+        pfd_update(i);
+    }
+}
+
+void pfd_update(int motor_num){
+    uint16_t pfd_input = 0x3000;    //command code 0011
+    uint8_t address_code = 2*(motor_num % 3)+1;
+    board_config(motor_num);
+    pfd_input |= address_code << 8;
+    pfd_input |= 103;                           //1.65V = 0.3*Vdd (Vdd=0.55)
+    PORTA &= ~(_BV(AMO7_DAC_LOAD));             //CS/LD low to begin serial input
+    for (int i=0; i<=15; i++){
+        PORTA &= ~(_BV(AMO7_DAC_CLOCK));        //Set dac clock to 0
+        if (pfd_input & _BV(15)){
+            PORTA |= _BV(AMO7_DAC_INPUT);        
         }
         else {
-            PORTA &= ~(_BV(6));
+            PORTA &= ~(_BV(AMO7_DAC_INPUT));
         }
-        PORTA |= _BV(5);
-        init_input <<= 1;
+        PORTA |= _BV(AMO7_DAC_CLOCK);           //Set dac clock to 0
+        pfd_input <<= 1;
     }
-    PORTA &= ~(_BV(6));             
-    for (int j=0; j<=7; j++){           
-        PORTA &= ~(_BV(5));
-        PORTA |= _BV(5);
+    PORTA &= ~(_BV(AMO7_DAC_INPUT));            //DAC requires 24 bit message     
+    for (int i=0; i<=7; i++){           
+        PORTA &= ~(_BV(AMO7_DAC_CLOCK));
+        PORTA |= _BV(AMO7_DAC_CLOCK);
     }
-    PORTA |= _BV(4);*/
-    /*
-     *    //Set PFD = 0.4*VDD
-     *    for(int i = 0; i<=2; i++){
-     *        init_input = 0x3000;    //command code 0011 + PFD
-     *        init_input |= (1+2*i) << 8;
-     *        PORTA &= ~(_BV(4));             //CS/LD low to begin serial input
-     *        for (int j=0; j<=15; i++){
-     *            PORTA &= ~(_BV(5));         //Set dac clock to 0
-     *            if (dac_input & _BV(15)){
-     *                PORTA |= _BV(6);        
-}
-else {
-    PORTA &= ~(_BV(6));
-}
-PORTA |= _BV(5);
-dac_input <<= 1;
-}
-PORTA &= ~(_BV(6));             
-for (int j=0; j<=7; i++){           
-    PORTA &= ~(_BV(5));
-    PORTA |= _BV(5);
-}
-PORTA |= _BV(4);            //CS/LD high to finish serial input
-}
-//finish PFD input
-*/
+    PORTA |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input
 }
 
 void stepper_dac_update () {
@@ -1264,6 +1251,7 @@ void background_stepping (){
             new_ms = true;
         }
         else if (move_array[step_queue[0]][queued_microstep_counter] == 0 && queued_microstep_counter >= 3){
+            debug_move();
             queued_microstep_counter = 0;
             for (int k = 0; k <= max_microstep_number; k++){
                 move_array[step_queue[0]][k]=step_array[step_queue[0]][k];
@@ -1334,29 +1322,18 @@ void move_config (){
         exp_bug *= 2;
         if (move_array[stepper_motor_number][i] != 0){
             detect_movement = true;
-            was_round = false;
         }
     }
-    /*if (!detect_movement && (rounding_steps == 0 || was_round == 1)){
-        move_array[stepper_motor_number][microstep_number] += 1;
-        step_array[stepper_motor_number][microstep_number] += 1;
-        motor_config(stepper_motor_number, 1, microstep_number);
-        move_motor(stepper_motor_number, 1);
-        return;
-    }*/
     if (!detect_movement){
-        return;
+            for (int i = 0; i <= max_microstep_number; i++){
+                move_array[stepper_motor_number][i]=step_array[stepper_motor_number][i];
+            }
+         return;
     }
-    if (rounding_steps != 0){
+    if (rounding_steps != 0 && detect_movement){
         bool round_dir = rounding_steps > 0? false:true;
         motor_config(stepper_motor_number, round_dir, 3);
         move_motor(stepper_motor_number, abs(rounding_steps));  //move to nearest full step
-        /*if (!detect_movement) {
-            move_array[stepper_motor_number][3] -= rounding_steps;
-            step_array[stepper_motor_number][3] -= rounding_steps;
-            was_round = 1;
-            return;
-        }*/
         _delay_ms(50);
         move_array[stepper_motor_number][3] += rounding_steps;
     }
@@ -1373,6 +1350,15 @@ void move_motor (int motor_num, int steps){
     for (int j = 0; j<steps; j++){
         PORTJ |= _BV(step_shift);
         _delay_ms(5);
+        PORTJ &= ~(_BV(step_shift));
+    }
+}
+
+void debug_move (){
+    int step_shift = (0 % 3) + 4;
+    for (int j = 0; j<5; j++){
+        PORTJ |= _BV(step_shift);
+        _delay_ms(100);
         PORTJ &= ~(_BV(step_shift));
     }
 }
