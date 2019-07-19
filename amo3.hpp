@@ -47,42 +47,18 @@ const char firmware_id[] = "0.0.0";
 //  AMO3
 bool    debugging_power         = false;
 bool    amo3_pwr_state          = true;
-bool    amo3_pwr_state_latched  = true; 
-double  amo3_voltage_out  [4]   = {0.0, 0.0, 0.0, 0.0}; 
-bool    amo3_enable  [4]        = {false, false, false, false};
+bool    amo3_pwr_state_latched  = true;  
 
 enum {
     amo3_fault_none	, //0
     amo3_fault_pwr	, //1
 };
-const char* amo3_fault_string[] = {
-    "No faults"		,
-    "nPower pin High"	
-};
 uint8_t  amo3_fault       = amo3_fault_none;
 uint8_t  amo3_fault_prev  = amo3_fault_none;
-/*
-uint16_t  EEMEM amo3_eeprom_vout1_mv_hi;
-uint16_t  EEMEM amo3_eeprom_vout2_mv_hi;
-uint16_t  EEMEM amo3_eeprom_vout3_mv_hi;
-uint16_t  EEMEM amo3_eeprom_vout4_mv_hi;
-uint16_t  EEMEM amo3_eeprom_vout1_mv_lo;
-uint16_t  EEMEM amo3_eeprom_vout2_mv_lo;
-uint16_t  EEMEM amo3_eeprom_vout3_mv_lo;
-uint16_t  EEMEM amo3_eeprom_vout4_mv_lo;*/
 uint8_t   amo3_save_flag  = 0;
 
 void  amo3_init             ();
-void  amo3_load_state       ();
-void  amo3_save_state       ();
 void  amo3_fault_check      ();
-void  amo3_hardware_update  ();
-
-//  VOUT
-uint32_t     amo3_mv_latched[4]         = {0,0,0,0};
-float        max_V                      = 255;
-
-void  amo3_VOUT_init    ();
 
 //  Buttons (AMO6)
 static int8_t  amo6_encoder_val       = 0;
@@ -131,7 +107,7 @@ uint32_t amo6_screen_line_color = MY_DARKBLUE;
 
 enum {
     amo6_screen_null_tag         , // 0
-    amo6_screen_voltage_output1  , // 1
+    stepper_voltage_output       , // 1
     coarse_display               , // 2
     step_counter                 , // 3
     on_off_switch                , // 4
@@ -161,24 +137,25 @@ void  amo6_screen_shortPress         (bool *press_detected);
 void  amo6_screen_processShortPress  ();
 
 //Stepper Motors (AMO7)
-int          stepper_motor_number       = 0;    //Tracks active stepper motor
 uint16_t     max_stepper_motor_number   = 11;
-int16_t      microstep_number           = 0;    //Step size counter
-int16_t      max_microstep_number       = 3;
-int16_t      max_steps                  = 2000;
-int8_t       max_queued                 = 12;
+int          max_microstep_number       = 3;
+int          max_steps                  = 2000;
+int          max_queued                 = 12;
+int          max_V                      = 255;
+float        step_size                  = 1.8;  //Only used to display total steps
+int          microstep_number           = 0;    //Tracks microstepping config
+int          stepper_motor_number       = 0;    //Tracks active stepper motor
 int16_t      step_array[12][4]           ;      //Holds total steps
 int16_t      move_array[12][4]           ;      //Holds steps to move
-float        step_size                  = 1.8;
 int          stepper_voltage[12]        = {0,0,0,0,0,0,0,0,0,0,0,0};
 bool         stepper_enable [12]        = {0,0,0,0,0,0,0,0,0,0,0,0};
-bool         was_round                  = false;
+int          pfd_voltage[12]            = {0,0,0,0,0,0,0,0,0,0,0,0};
 
 bool         dir_arr[4]                 = {0,0,0,0};
-int          step_queue[12]            ;
-int          queue_index                = 0;
+int          step_queue[12]            ;        //Queues motors to run in background
+int          queue_index                = 0;    //Tracks how many motors are queued up
 bool         new_ms                     = 1;
-int          queued_microstep_counter   = 0;
+int          queued_microstep_counter   = 0;    //Tracks background microstepping
 bool         move_enable[12]            = {1,1,1,1,1,1,1,1,1,1,1,1};
 
 void dac_init               ();
@@ -220,69 +197,18 @@ void amo3_init ()
     //motors init (AMO7)
     DDRA = 0xff; //PORTA is shift register & DAC
     DDRJ = 0xf0; //J4-J7 are motor step output
-    DDRC = 0x0f; //C0-C3 en/dis-able digital isolators, C4-C7 motor feedback
-    PORTA = 0x91;
+    DDRC = 0x0f; //C0-C3 enable digital isolators, C4-C7 are motor feedback
+    PORTA = 0x91;//set A0 (drv_clear), A4 (dac_load), A7 (dac_clear) high
+    PORTC = 0x00;
     
     // hardware init
-    amo3_VOUT_init(); //first call doesn't work
     amo6_screen_init();
     amo6_buttons_init();
-    amo3_load_state();
-    amo3_VOUT_init(); //need this second call to reset properly
     _delay_ms(100);   //just in case, to prevent "power-on reset glitch"
-    PORTC = 0x00;
     dac_init(); //AMO7
-    board_config(stepper_motor_number);
-    _delay_ms(5000);
+    board_config(stepper_motor_number); //start at board 0, motor 0
+    _delay_ms(500);
 }
-
-void amo3_load_state ()
-{/*
-    // retrieve top 16 bit and bottom 16 bit from memory
-    // convert top 16bit and bottom 16bit into integer
-    uint32_t val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout1_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout1_mv_lo);
-    // convert integer into float
-    amo3_voltage_out[0] = val > 150000? 150: val/1000.0;
-    
-    val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout2_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout2_mv_lo);
-    amo3_voltage_out[1] = val > 150000? 150: val/1000.0;
-    
-    val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout3_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout3_mv_lo);
-    amo3_voltage_out[2] = val > 150000? 150: val/1000.0;
-    
-    val = ((uint32_t)eeprom_read_word(&amo3_eeprom_vout4_mv_hi)<<16)|eeprom_read_word(&amo3_eeprom_vout4_mv_lo);
-    amo3_voltage_out[3] = val > 150000? 150: val/1000.0;
-*/}
-
-void amo3_save_state ()
-{/*
-    // convert float into integer
-    uint32_t val = amo3_voltage_out[0]*1000;
-    // split integer to top 16bit and bottom 16bit
-    // save top 16bit and bottom 16bit into memory
-    uint16_t hi_word = val >> 16;
-    uint16_t lo_word = val & 0xFFFF;
-    eeprom_update_word(&amo3_eeprom_vout1_mv_hi, hi_word);
-    eeprom_update_word(&amo3_eeprom_vout1_mv_lo, lo_word);
-    
-    val = amo3_voltage_out[1]*1000;
-    hi_word = val >> 16;
-    lo_word = val & 0xFFFF;
-    eeprom_update_word(&amo3_eeprom_vout2_mv_hi, hi_word);
-    eeprom_update_word(&amo3_eeprom_vout2_mv_lo, lo_word);
-    
-    val = amo3_voltage_out[2]*1000;
-    hi_word = val >> 16;
-    lo_word = val & 0xFFFF;
-    eeprom_update_word(&amo3_eeprom_vout3_mv_hi, hi_word);
-    eeprom_update_word(&amo3_eeprom_vout3_mv_lo, lo_word);
-    
-    val = amo3_voltage_out[3]*1000;
-    hi_word = val >> 16;
-    lo_word = val & 0xFFFF;
-    eeprom_update_word(&amo3_eeprom_vout4_mv_hi, hi_word);
-    eeprom_update_word(&amo3_eeprom_vout4_mv_lo, lo_word);
-*/}
 
 void amo3_fault_check ()
 {
@@ -291,10 +217,10 @@ void amo3_fault_check ()
         if(amo3_fault != amo3_fault_pwr){
             amo3_fault = amo3_fault_pwr;
             if (amo3_pwr_state){
-                int i;
+//                 int i;
                 //disable all output
-                for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
-                for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
+//                 for (i = 0; i<4; ++i){ amo3_voltage_out[i] = 0; }
+//                 for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
                 amo3_pwr_state = false;
             }
         }
@@ -309,40 +235,6 @@ void amo3_fault_check ()
             }
         }
     }
-}
-
-void amo3_hardware_update ()
-{
-    // sends voltage values
-    uint8_t i;
-    if (amo3_pwr_state && (amo3_fault==amo3_fault_none)) { ;
-        for (i=0;i<4;++i){
-            uint32_t val = (amo3_enable[i])? (amo3_voltage_out[i]*1000.0) : 0;
-            if (val != amo3_mv_latched[i]){
-                amo3_mv_latched[i] = val;
-            }
-        }
-        // we only want to display save flag for a fixed number of seconds
-        if (amo3_save_flag)
-            --amo3_save_flag;
-    }
-    // fault handling
-    if(amo3_pwr_state != amo3_pwr_state_latched) {
-        if (amo3_pwr_state && (amo3_fault==amo3_fault_none)){ ;
-            //IF FAULT -> NO FAULT
-        }
-        else{ ;
-            //IF NO FAULT -> FAULT
-        }
-        amo3_pwr_state_latched = amo3_pwr_state;
-    }
-}
-
-void amo3_VOUT_init ()
-{
-    uint8_t i;
-    for (i = 0; i<4; ++i){ amo3_enable[i] = false; }
-    amo3_pwr_state = true;
 }
 
 // Buttons (AMO6)
@@ -434,7 +326,7 @@ void amo6_buttons_update () {
     if (amo6_sw1_pushed && amo6_sw2_pushed){
         switch (tag) {
             // do not do anything if something is selected
-            case amo6_screen_voltage_output1	:
+            case stepper_voltage_output	:
             case coarse_display	            :
             case step_counter             	:
             case fine_step_adjustment         :
@@ -449,7 +341,6 @@ void amo6_buttons_update () {
                 _delay_ms(60);
                 AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
                 // save to EEPROM
-                amo3_save_state();
         }
         // reset long-press variables
         amo6_count_latch[1] = false;
@@ -469,7 +360,7 @@ void amo6_buttons_update () {
             amo6_count_latch[0] = true; // start counting hold time
             if (!sw1_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
                 switch (tag) {
-                    case amo6_screen_voltage_output1	:
+                    case stepper_voltage_output	:
                         AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                         _delay_ms(5);
                         tmp = stepper_voltage[stepper_motor_number] - 1;
@@ -523,7 +414,7 @@ void amo6_buttons_update () {
             amo6_count_latch[1] = true; // start counting hold time
             if (!sw2_now) { //ensure sw is pressed to workaround a bug in the mechanical switch
                 switch (tag) {
-                    case amo6_screen_voltage_output1	:
+                    case stepper_voltage_output	:
                         AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                         _delay_ms(5);
                         tmp = stepper_voltage[stepper_motor_number] + 1;
@@ -578,7 +469,7 @@ void amo6_buttons_update () {
         // update values
         if (amo6_hold_count[1] >= amo6_hold_threshold){
             switch (tag) {
-                case amo6_screen_voltage_output1	:
+                case stepper_voltage_output	:
                     AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                     _delay_ms(5);
                     tmp = stepper_voltage[stepper_motor_number] + 20;
@@ -631,7 +522,7 @@ void amo6_buttons_update () {
         // update values
         if (amo6_hold_count[0] >= amo6_hold_threshold){
             switch (tag) {
-                case amo6_screen_voltage_output1	:
+                case stepper_voltage_output	:
                     AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                     _delay_ms(5);
                     tmp = stepper_voltage[stepper_motor_number] - 20;
@@ -688,7 +579,7 @@ void amo6_buttons_update () {
         int8_t val = amo6_encoder_val - amo6_encoder_val_prev;
         //int8_t val = amo6_encoder_val;
         switch (tag) {
-            case amo6_screen_voltage_output1	:
+            case stepper_voltage_output	:
                 val = val/10;
                 if (val!=0) {
                     AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -813,16 +704,16 @@ void amo6_serial_parse ()
             float tmp = atof(token[2]);
             if (tmp > max_V) tmp = max_V; //tagasdf
             if (tmp < 0) tmp = 0;
-            if (channel <= 4 && channel >=1)
-                amo3_voltage_out[channel-1] = tmp;
-            printf("vout.w : set output #%d to %0.3f\n", channel, amo3_voltage_out[channel-1]);
+            if (channel <= 4 && channel >=1){}
+//                 amo3_voltage_out[channel-1] = tmp;
+//           printf("vout.w : set output #%d to %0.3f\n", channel,amo3_voltage_out[channel-1]);
         }
     }
     else if(strcmp(token[0],"vout.r")==0) {
         if(i==2){
             int channel = atoi(token[1]);
             if (channel <= 4 && channel >=1){
-                printf("%0.3f\n", amo3_voltage_out[channel-1]);
+//                 printf("%0.3f\n", amo3_voltage_out[channel-1]);
             }
         }
     }
@@ -835,12 +726,12 @@ void amo6_serial_parse ()
             if (channel <= 4 && channel >=1)
             {
                 if (tmp == 0){
-                    amo3_enable[channel-1]=false;
-                    printf("out.w : output %d disabled\n", channel);
+//                     amo3_enable[channel-1]=false;
+//                     printf("out.w : output %d disabled\n", channel);
                 }
                 else if (tmp == 1){
-                    amo3_enable[channel-1]=true;
-                    printf("out.w : output %d enabled\n", channel);
+//                     amo3_enable[channel-1]=true;
+//                     printf("out.w : output %d enabled\n", channel);
                 }
             }
         }
@@ -850,7 +741,7 @@ void amo6_serial_parse ()
             int channel = atoi(token[1]);
             if (channel <= 4 && channel >=1)
             {
-                printf("%d\n", amo3_enable[channel-1]);
+//                 printf("%d\n", amo3_enable[channel-1]);
             }
         }
     }
@@ -912,8 +803,6 @@ void amo6_screen_init ()
     CleO.StringExt(FONT_BIT_3 , 10 , 120 , amo6_screen_text_color , ML , 0 , 0, buf_text);
     sprintf(buf_text,"Firmware ID    : %s", firmware_id);
     CleO.StringExt(FONT_BIT_3, 10, 140, amo6_screen_text_color, ML, 0, 0, buf_text);
-    //  sprintf(buf_text,"%lu,%2.2f,%0.5f,%lu", amo1_iout_max_set_ua/1000, amo1_iout_res, amo1_iout_ua_to_cnts, amo1_pfet_max_mw);
-    //  CleO.StringExt(FONT_BIT_3, 10, 180, amo6_screen_text_color, ML, 0, 0, buf_text);
     sprintf(buf_text,"Starting Up ... ");
     CleO.StringExt(FONT_BIT_4 , 10 , 220 , amo6_screen_text_color , ML , 0 , 0, buf_text);
     CleO.Show();
@@ -950,8 +839,8 @@ void amo6_screen_draw ()
     // Draw Boxes and Strings
     
     //Voltage
-    CleO.Tag(amo6_screen_voltage_output1);
-    CleO.RectangleColor(amo6_screen_select[amo6_screen_voltage_output1] ? CLEO_SELECT : MY_WHITE);
+    CleO.Tag(stepper_voltage_output);
+    CleO.RectangleColor(amo6_screen_select[stepper_voltage_output] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
     double output_volts = stepper_voltage[stepper_motor_number]*4.096/256;
     sprintf(text_buf, "%1.3f", output_volts);
@@ -1007,62 +896,16 @@ void amo6_screen_draw ()
     CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
     sprintf(text_buf, "#%d", stepper_motor_number+1);
     CleO.StringExt(FONT_SANS_6, 80, 80, amo6_screen_text_color, MM, 0, 0, text_buf);
-    
-    // Draw the ON/OFF box
-    
-    // (+) we write string "SAVED" if we write to EEPROM
-    if (amo3_fault == amo3_fault_none){
-        // Draw the ON/OFF strings
-        CleO.Tag(on_off_switch);
-        CleO.RectangleColor(stepper_enable[stepper_motor_number] ? MY_GREEN : MY_RED);
-        CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
-        if (!amo3_save_flag)
-            strcpy(text_buf, stepper_enable[stepper_motor_number]? "ON" : "OFF");
-        else
-            strcpy(text_buf, "Saved");
-        CleO.StringExt(FONT_SANS_5, 80, 240, amo6_screen_text_color, MM, 0, 0, text_buf);
-        
-        // (+) we write string "SAVED" if we write to EEPROM  
-        
-    }
-    else{
-        /*
-         *    // Draw the Power Fault Strings
-         *    CleO.RectangleColor(MY_RED);
-         *    CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
-         *    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW2_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
-         *    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW2_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
-         *    CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "1");
-         * 
-         *    CleO.RectangleXY(120-2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
-         *    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW4_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
-         *    CleO.StringExt(FONT_SANS_3, 120, AMO6_SCREEN_ROW4_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
-         *    CleO.StringExt(FONT_SANS_2, 228, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "3");
-         * 
-         *    CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW2_Y-AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW2_H-3*AMO6_SCREEN_OFFSET);
-         *    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW2_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
-         *    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW2_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
-         *    CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW2_Y-20, amo6_screen_text_color, MM, 0, 0, "2");
-         * 
-         *    CleO.RectangleXY(360+2*AMO6_SCREEN_OFFSET, AMO6_SCREEN_ROW4_Y+AMO6_SCREEN_OFFSET, 240, AMO6_SCREEN_ROW4_H-AMO6_SCREEN_OFFSET);
-         *    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW4_Y-15, amo6_screen_text_color, MM, 0, 0, "POWER");
-         *    CleO.StringExt(FONT_SANS_3, 360, AMO6_SCREEN_ROW4_Y+15, amo6_screen_text_color, MM, 0, 0, "FAULT");
-         *    CleO.StringExt(FONT_SANS_2, 468, AMO6_SCREEN_ROW4_Y-20, amo6_screen_text_color, MM, 0, 0, "4");
-         */
-    }
+
+    //ON/OFF Switch
+    CleO.Tag(on_off_switch);
+    CleO.RectangleColor(stepper_enable[stepper_motor_number] ? MY_GREEN : MY_RED);
+    CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
+    strcpy(text_buf, stepper_enable[stepper_motor_number]? "ON" : "OFF");
+    CleO.StringExt(FONT_SANS_5, 80, 240, amo6_screen_text_color, MM, 0, 0, text_buf);
     
     // Update Screen
     CleO.Show();
-    
-    //If calibrate has been toggled, untoggle
-    /*
-     *  if (amo6_screen_select[calibrate_button] == true){
-     *    _delay_ms(1000);
-     *    for(int i=0;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-     *    CleO.RectangleColor(amo6_screen_select[calibrate_button] ? CLEO_SELECT : MY_WHITE);
-}
-*/
-    
 }
 
 void amo6_screen_touch ()
@@ -1100,12 +943,12 @@ void amo6_screen_processShortPress () {
         return;
     
     switch (amo6_screen_current_tag) {
-        case amo6_screen_voltage_output1	:
+        case stepper_voltage_output	:
             AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
             _delay_ms(2);
-            sel = !amo6_screen_select[amo6_screen_voltage_output1];
+            sel = !amo6_screen_select[stepper_voltage_output];
             for(i=0;i<AMO6_SCREEN_TAGS;i++)amo6_screen_select[i]=0;
-            amo6_screen_select[amo6_screen_voltage_output1] = sel;
+            amo6_screen_select[stepper_voltage_output] = sel;
             break;
         case on_off_switch	:
             AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -1170,7 +1013,7 @@ void dac_init(){
     init_input |= (15 << 4);                    //all dac address code
     PORTA &= ~(_BV(AMO7_DAC_LOAD));             //CS/LD low to begin serial input
     for (int i=0; i<=23; i++){
-        PORTA &= ~(_BV(AMO7_DAC_CLOCK));        //set dac clock to 0
+        PORTA &= ~(_BV(AMO7_DAC_CLOCK));        //dac clocks sdi in on rising edge
         if (init_input & _BV(0)){
             PORTA |= _BV(AMO7_DAC_INPUT);
         }
@@ -1178,93 +1021,92 @@ void dac_init(){
             PORTA &= ~(_BV(AMO7_DAC_INPUT));
         }
         PORTA |= _BV(AMO7_DAC_CLOCK);
-        init_input >>= 1;                       //set dac clock to 1
+        init_input >>= 1;
     }
     
     PORTA |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input 
     _delay_ms(100);
-    for (int i = 0; i<= 11; i++){
-        pfd_update(i);
+    for (int i = 0; i<= 11; i++){  //set pfd for motors
+//         pfd_update(pfd_voltage[i]);
     }
 }
 
 void pfd_update(int motor_num){
-    uint16_t pfd_input = 0x3000;    //command code 0011
+    uint16_t pfd_input = 0x3000;        //command code 0011
     uint8_t address_code = 2*(motor_num % 3)+1;
     board_config(motor_num);
     pfd_input |= address_code << 8;
-    pfd_input |= 103;                           //1.65V = 0.3*Vdd (Vdd=0.55)
-    PORTA &= ~(_BV(AMO7_DAC_LOAD));             //CS/LD low to begin serial input
+    pfd_input |= 103;                   //1.65V = 0.3*Vdd (where Vdd=0.55)
+    PORTA &= ~(_BV(AMO7_DAC_LOAD));     //CS/LD low to begin serial input
     for (int i=0; i<=15; i++){
-        PORTA &= ~(_BV(AMO7_DAC_CLOCK));        //Set dac clock to 0
+        PORTA &= ~(_BV(AMO7_DAC_CLOCK));//dac clocks sdi in on rising edge
         if (pfd_input & _BV(15)){
             PORTA |= _BV(AMO7_DAC_INPUT);        
         }
         else {
             PORTA &= ~(_BV(AMO7_DAC_INPUT));
         }
-        PORTA |= _BV(AMO7_DAC_CLOCK);           //Set dac clock to 0
+        PORTA |= _BV(AMO7_DAC_CLOCK);   //Set dac clock to 0
         pfd_input <<= 1;
     }
-    PORTA &= ~(_BV(AMO7_DAC_INPUT));            //DAC requires 24 bit message     
+    PORTA &= ~(_BV(AMO7_DAC_INPUT));    //+8 don't-care bits since message must be 24b   
     for (int i=0; i<=7; i++){           
         PORTA &= ~(_BV(AMO7_DAC_CLOCK));
         PORTA |= _BV(AMO7_DAC_CLOCK);
     }
-    PORTA |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input
+    PORTA |= _BV(AMO7_DAC_LOAD);        //CS/LD high to finish serial input
 }
 
 void stepper_dac_update () {
-    uint16_t dac_input = 0x3000;    //command code 0011
+    uint16_t dac_input = 0x3000;        //command code 0011
     uint8_t address_code = 2*(stepper_motor_number % 3);
     board_config(stepper_motor_number);
     dac_input |= address_code << 8;
     dac_input |= stepper_voltage[stepper_motor_number];
-    PORTA &= ~(_BV(AMO7_DAC_LOAD));             //CS/LD low to begin serial input
+    PORTA &= ~(_BV(AMO7_DAC_LOAD));     //CS/LD low to begin serial input
     for (int i=0; i<=15; i++){
-        PORTA &= ~(_BV(AMO7_DAC_CLOCK));        //Set dac clock to 0
+        PORTA &= ~(_BV(AMO7_DAC_CLOCK));//dac clocks sdi in on rising edge
         if (dac_input & _BV(15)){
             PORTA |= _BV(AMO7_DAC_INPUT);        
         }
         else {
             PORTA &= ~(_BV(AMO7_DAC_INPUT));
         }
-        PORTA |= _BV(AMO7_DAC_CLOCK);           //Set dac clock to 0
+        PORTA |= _BV(AMO7_DAC_CLOCK);
         dac_input <<= 1;
     }
-    PORTA &= ~(_BV(AMO7_DAC_INPUT));            //DAC requires 24 bit message     
+    PORTA &= ~(_BV(AMO7_DAC_INPUT));    //+8 don't-care bits since message must be 24b
     for (int i=0; i<=7; i++){           
         PORTA &= ~(_BV(AMO7_DAC_CLOCK));
         PORTA |= _BV(AMO7_DAC_CLOCK);
     }
-    PORTA |= _BV(AMO7_DAC_LOAD);                 //CS/LD high to finish serial input
+    PORTA |= _BV(AMO7_DAC_LOAD);        //CS/LD high to finish serial input
 }
 
 void background_stepping (){
     if (queue_index != 0){
         if (new_ms){
             motor_config(step_queue[0], dir_arr[queued_microstep_counter],queued_microstep_counter);
-            new_ms = false;//goes to next and goes true and keeps toggling
+            new_ms = false;
         }
         if (move_array[step_queue[0]][queued_microstep_counter] == 0 && (queued_microstep_counter < 3)) {
             queued_microstep_counter += 1;
             new_ms = true;
         }
-        else if (move_array[step_queue[0]][queued_microstep_counter] == 0 && queued_microstep_counter >= 3){
-            debug_move();
-            queued_microstep_counter = 0;
+        else if (move_array[step_queue[0]][queued_microstep_counter] == 0 && queued_microstep_counter >= 3){    //end of current motor, reset & move on
             for (int k = 0; k <= max_microstep_number; k++){
                 move_array[step_queue[0]][k]=step_array[step_queue[0]][k];
             }
             move_enable[step_queue[0]] = 1;
             step_queue[0] = 0;
+            queued_microstep_counter = 0;
             for (int i = 1; i<= queue_index; i++){
                 step_queue[i-1] = step_queue[i];
             }
             queue_index -= 1;
             new_ms = true;
         }
-        else if (move_array[step_queue[0]][queued_microstep_counter] != 0){
+        else if (move_array[step_queue[0]][queued_microstep_counter] != 0){ //move motor
             int temp = dir_arr[queued_microstep_counter]? -1:1;
             move_motor(step_queue[0], 1);
             move_array[step_queue[0]][queued_microstep_counter] += temp;
@@ -1288,16 +1130,16 @@ void motor_config(int motor_num, bool dir, int msn) {
     board_config(motor_num);
     reg_input |= msn<<ms_shift;
     reg_input |= dir<<(ms_shift-1);
-    reg_input |= 0x1084;
-    int board_num_min = motor_num-(motor_num%3);
+    reg_input |= 0x1084;                    //here, we enable motors in current board
+    int board_num_min = motor_num-(motor_num%3);    
     for (int i = board_num_min; i <= board_num_min+2; i++){
-        if (stepper_enable[i]){             //enables motors switched on within board
-            int on_off_shift = 12-5*(i%3);
+        if (stepper_enable[i]){             
+            int on_off_shift = 12-5*(i%3);  
             reg_input &= ~(_BV(on_off_shift)); 
         }
     }
     for (int i=0; i<=15; i++){
-        PORTA &= ~(_BV(AMO7_DRV_CLOCK));    //Set shift & storage clocks to 0
+        PORTA &= ~(_BV(AMO7_DRV_CLOCK));    //drv clocks in on rising edge
         if (reg_input & _BV(0)){
             PORTA |= _BV(AMO7_DRV_INPUT);
         }
@@ -1308,13 +1150,13 @@ void motor_config(int motor_num, bool dir, int msn) {
         reg_input >>= 1;
     }
     PORTA |= _BV(AMO7_DRV_LOAD);
-    PORTA &= 0xf1;  
+    PORTA &= 0xf1;                          //Set A1-A3 low
 }
 
 void move_config (){
     int rounding_steps = 0;
     bool detect_movement = false;
-    int exp_bug = 1;
+    int exp_bug = 1;                    //need int since float behaves weirdly
     for (int i = 0; i<=max_microstep_number; i++){
         move_array[stepper_motor_number][i] = step_array[stepper_motor_number][i]-move_array[stepper_motor_number][i];
         rounding_steps += step_array[stepper_motor_number][i]*8/ exp_bug;
@@ -1324,20 +1166,20 @@ void move_config (){
             detect_movement = true;
         }
     }
-    if (!detect_movement){
+    if (!detect_movement){              //update move_array and do nothing
             for (int i = 0; i <= max_microstep_number; i++){
                 move_array[stepper_motor_number][i]=step_array[stepper_motor_number][i];
             }
          return;
     }
     if (rounding_steps != 0 && detect_movement){
-        bool round_dir = rounding_steps > 0? false:true;
+        bool round_dir = rounding_steps > 0? false:true;        //move to nearest full step
         motor_config(stepper_motor_number, round_dir, 3);
-        move_motor(stepper_motor_number, abs(rounding_steps));  //move to nearest full step
+        move_motor(stepper_motor_number, abs(rounding_steps));
         _delay_ms(50);
         move_array[stepper_motor_number][3] += rounding_steps;
     }
-    for (int i = 0; i<=max_microstep_number; i++){
+    for (int i = 0; i<=max_microstep_number; i++){              //set direction for background
         dir_arr[i] = move_array[stepper_motor_number][i]>0 ? true:false;
     }
     move_enable[stepper_motor_number] = 0;

@@ -4,6 +4,7 @@
  * Copyright 2013--2017 
  *  Christian Schneider <software(at)chschneider(dot)eu>
  *  Peter Yu <ucla(dot)eshop(at)gmail(dot)com>
+ *  Clayton Ho <claytonho(at)g(dot)ucla(dot)edu>
  *
  * This file is part of the AMO control unit firmware
  * (called "program" in the following).
@@ -85,18 +86,10 @@ int main(void) {
             background_stepping();
             no_op = 0;
         }
-        if (counter%90==0) {
-            amo3_fault_check();
-            no_op=0;
-        }
         if (counter%100==0) {
             amo6_buttons_update();
             amo6_serial_update();
             amo6_screen_update();
-            no_op=0;
-        }
-        if (counter%250==0) {
-            amo3_hardware_update();
             no_op=0;
         }
         if (no_op) _delay_ms(1);
