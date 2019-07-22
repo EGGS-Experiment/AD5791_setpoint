@@ -1,7 +1,7 @@
 /*
  * main program file
  *
- * Copyright 2013--2017 
+ * Copyright 2013--2019 
  *  Christian Schneider <software(at)chschneider(dot)eu>
  *  Peter Yu <ucla(dot)eshop(at)gmail(dot)com>
  *  Clayton Ho <claytonho(at)g(dot)ucla(dot)edu>
