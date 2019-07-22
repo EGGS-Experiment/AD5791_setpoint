@@ -717,15 +717,16 @@ void amo6_serial_parse ()
             int previous_motor = stepper_motor_number;
             stepper_motor_number = channel-1;
             char *move_tmp[4];                       //split input into steps
-            move_tmp[0] = strtok(token[2], ",");
-            step_array[stepper_motor_number][0] = atoi(move_tmp[0]);
+            move_tmp[0] = strtok(amo6_serial_string, ",");
             for(int j = 1; j <= max_microstep_number; j++) {
                 move_tmp[j] = strtok(NULL, ",");
-                step_array[stepper_motor_number][j] = atoi(move_tmp[j]);
             }     
+            printf("move.w: motor #%d set to %s,%s,%s,%s\n", channel, move_tmp[0],move_tmp[1],move_tmp[2],move_tmp[3]);
+            for (int j = 0; j <= max_microstep_number; j++){
+                step_array[stepper_motor_number][j] += atoi(move_tmp[j]);
+            }
             move_config();
             stepper_motor_number = previous_motor;
-            printf("move.w: motor #%d set to %s,%s,%s,%s\n", channel, move_tmp[0],move_tmp[1],move_tmp[2],move_tmp[3]);
         }
     }
     else if(strcmp(token[0],"move.r")==0 && i == 2) { //read step array
@@ -855,12 +856,8 @@ void amo6_screen_draw () {
     CleO.Tag(move_button);
     CleO.RectangleColor(move_enable[stepper_motor_number] ? MY_GREEN : MY_RED);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
-    if (move_enable[stepper_motor_number]){
-        CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVE");
-    }
-    else {
-        CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVING");
-    }
+    sprintf(text_buf, "%d", move_array[stepper_motor_number][microstep_number]);
+    CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVE");
     
     //Coarse Steps
     CleO.Tag(coarse_display);
