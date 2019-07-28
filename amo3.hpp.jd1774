@@ -799,7 +799,7 @@ void amo6_serial_parse ()
                 printf("move.w: motor #%d set to %s,%s,%s,%s\n", channel, move_tmp[0],move_tmp[1],move_tmp[2],move_tmp[3]);
             }
             else {
-                printf("move.w invalid: motor currently queued up to move\n");
+                printf("move.w invalid: motor currently queued up to move");
             }
         }
     }
@@ -830,7 +830,7 @@ void amo6_serial_parse ()
                 printf("calib.w : calibrated motor #%d\n", channel);
             }
             else {
-                printf("calib.w invalid: motor currently queued up to move\n");
+                printf("calib.w invalid: motor currently queued up to move");
             }
         }
     }
@@ -940,11 +940,8 @@ void amo6_screen_draw () {
     if (move_enable[stepper_motor_number]){
         CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVE");
     }
-    else if (!move_enable[stepper_motor_number]  && step_queue[0] == stepper_motor_number) {
-        CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVING");
-    }
     else {
-        CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "QUEUED");
+        CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVING");
     }
     
     //Coarse Steps
@@ -961,7 +958,7 @@ void amo6_screen_draw () {
     
     //Calibrate Button
     CleO.Tag(calibrate_button);
-    CleO.RectangleColor(move_enable[stepper_motor_number] ? MY_GREEN : MY_RED);
+    CleO.RectangleColor(amo6_screen_select[calibrate_button] ? CLEO_SELECT : MY_GREEN);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     CleO.StringExt(FONT_SANS_3, 400, 120, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
     
@@ -1067,11 +1064,9 @@ void amo6_screen_processShortPress () {
             _delay_ms(2);
             for(i=0;i<calibrate_button;i++) amo6_screen_select[i]=0;
             for(i=calibrate_button+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-            if (move_enable[stepper_motor_number]){
-                for (i=0; i<=max_microstep_number; i++){ //reset step array of motor
-                    move_array[stepper_motor_number][i] = 0;
-                    step_array[stepper_motor_number][i] = 0;
-                }
+            for (i=0; i<=max_microstep_number; i++){ //reset step array of motor
+                move_array[stepper_motor_number][i] = 0;
+                step_array[stepper_motor_number][i] = 0;
             }
             break;
         case coarse_display	:
@@ -1136,12 +1131,12 @@ void amo7_stepper_dac_update (int motor_num, int mode) {
     amo7_board_config(motor_num);
     switch (mode){                      //mode: 0 = holding, 1 = moving, 2 = pfd
         case 0:
+            printf("holding");
             dac_input |= holding_voltage[motor_num];   
-            printf("holding: %x\n", dac_input);
             break;
         case 1:
+            printf("moving");
             dac_input |= moving_voltage[motor_num];
-            printf("moving: %x\n", dac_input);
             break;
         case 2:
             address_code += 1;
@@ -1149,6 +1144,7 @@ void amo7_stepper_dac_update (int motor_num, int mode) {
             break;
     }
     dac_input |= (address_code << 8);
+    printf("%x\n",dac_input);
     PORTA &= ~(_BV(AMO7_DAC_LOAD));     //CS/LD low to begin serial input
     for (int i=0; i<=15; i++){
         PORTA &= ~(_BV(AMO7_DAC_CLOCK));//dac clocks sdi in on rising edge
@@ -1173,8 +1169,8 @@ void background_stepping (){
     if (queue_index != 0){
         if (new_motor){
             amo7_stepper_dac_update(step_queue[0], 1);
-            printf("new motor\n");
             new_motor = false;
+            printf("new motor");
         }
         if (new_ms){
             amo7_motor_config(step_queue[0], dir_arr[queued_microstep_counter],queued_microstep_counter);
