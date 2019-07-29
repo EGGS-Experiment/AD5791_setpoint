@@ -32,13 +32,7 @@
 #include "spi_flex.h"
 
 #include "CleO.hpp"
-#include "ad5541.hpp"
-#include "ad5544.hpp"
-#include "ad5621.hpp"
-#include "ad5290.hpp"
-#include "max11100.hpp"
-#include "ad7921.hpp"
-#include "amo3.hpp"
+#include "amo7.hpp"
 
 
 int main(void) {
@@ -53,7 +47,7 @@ int main(void) {
     serial_console_init();  // enables interrupt!
     
     // AMO3
-    amo3_init();
+    amo7_init();
     
     // ////////////////////////////////////////////////////////////////////////
     // boot indicator
