@@ -152,7 +152,7 @@ int          amo7_moving_voltage[12]         = {0,0,0,0,0,0,0,0,0,0,0,0};
 int          amo7_holding_voltage[12]        = {0,0,0,0,0,0,0,0,0,0,0,0};
 int          amo7_pfd_voltage[12]            = {0,0,0,0,0,0,0,0,0,0,0,0};
 bool         amo7_stepper_enable [12]        = {0,0,0,0,0,0,0,0,0,0,0,0};
-long         amo7_speed_delay[12]            = {2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000};
+uint16_t      amo7_speed_delay[12]            = {2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000,2000};
         //Background stepping functionality
 bool         amo7_dir_arr[4]                 = {0,0,0,0};
 int          amo7_step_queue[12]             ;       //Queues motors to run in background
@@ -867,16 +867,16 @@ void amo6_serial_parse ()
             if (tmp > max_delay) tmp = max_delay;
             if (tmp < 0) tmp = 0;
             tmp = 1000000/tmp - amo7_base_delay;
-            amo7_speed_delay[channel-1] = (long) tmp;
+            amo7_speed_delay[channel-1] = (int) tmp;
             double speed = 1000000/(amo7_speed_delay[channel-1] + amo7_base_delay);
-            printf("speed.w : set motor #%d speed to %.2lf steps/s\n", channel, speed);
+            printf("speed.w : set motor #%d speed to %.2f steps/s\n", channel, speed);
         }
     }
     else if(strcmp(token[0],"speed.r")==0 && i==2) { //read speed
         int channel = atoi(token[1]);
         if (channel <= 12 && channel >=1){
             double tmp = 1000000/(amo7_speed_delay[channel-1]+amo7_base_delay);
-            printf("%.2lf steps/s\n", tmp);
+            printf("%.2f steps/s\n", tmp);
         }
     }
     else if(strcmp(token[0],"id?")==0 && i == 1) {
