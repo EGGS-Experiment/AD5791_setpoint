@@ -708,68 +708,47 @@ void amo6_serial_parse ()
         if(token[i] == NULL) break;
         i++;
     }
-    if(strcmp(token[0],"voutm.w")==0 && i == 3) {      //write moving voltage
+    if(strcmp(token[0],"vout.w")==0 && i == 4) {      //write moving voltage
         AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
         _delay_ms(5);
         int channel = atoi(token[1]);
-        double tmp = atof(token[2]);
+        double tmp = atof(token[3]);
         if (channel <= 12 && channel >=1){
             if (tmp >= 4.08) tmp = 4.08;
             if (tmp < 0) tmp = 0;
             tmp *= 256/4.096;
-            amo7_moving_voltage[channel-1] = (int) tmp;
-            double voltage_output = amo7_moving_voltage[channel-1]*4.096/256;
-            printf("voutm.w : set motor #%d to moving at %1.3fV\n", channel,voltage_output);
+            if (strcmp(token[2], "m")||strcmp(token[2], "M")){
+                amo7_moving_voltage[channel-1] = (int) tmp;
+                double voltage_output = amo7_moving_voltage[channel-1]*4.096/256;
+                printf("voutm.w : set motor #%d to moving at %1.3fV\n", channel,voltage_output);
+            }
+            else if (strcmp(token[2], "h")||strcmp(token[2], "H")){
+                amo7_holding_voltage[channel-1] = (int) tmp;
+                double voltage_output = amo7_holding_voltage[channel-1]*4.096/256;
+                printf("vouth.w : set motor #%d to holding at %1.3fV\n", channel, voltage_output);
+                amo7_stepper_dac_update(channel-1, 0);
+            }
+            else if (strcmp(token[2], "p")||strcmp(token[2], "P")){
+                amo7_pfd_voltage[channel-1] = (int) tmp;
+                double voltage_output = amo7_pfd_voltage[channel-1]*4.096/256;
+                printf("voutp.w : set motor #%d pfd to %1.3fV\n", channel,voltage_output);
+                amo7_stepper_dac_update(amo7_stepper_motor_number, 2);
+            }
         }
     }
-    else if(strcmp(token[0],"voutm.r")==0 && i==2) { //read moving voltage
+    else if(strcmp(token[0],"vout.r")==0 && i==3) { //read moving voltage
         int channel = atoi(token[1]);
         if (channel <= 12 && channel >=1){
-            double tmp = amo7_moving_voltage[channel-1]*4.096/256;
-            printf("%1.3fV\n", tmp);
-        }
-    }
-    else if(strcmp(token[0],"vouth.w")==0 && i == 3) {  //write holding voltage
-        AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
-        _delay_ms(5);
-        int channel = atoi(token[1]);
-        double tmp = atof(token[2]);
-        if (channel <= 12 && channel >=1){
-            if (tmp >= 4.08) tmp = 4.08;
-            if (tmp < 0) tmp = 0;
-            tmp *= 256/4.096;
-            amo7_holding_voltage[channel-1] = (int) tmp;
-            double voltage_output = amo7_holding_voltage[channel-1]*4.096/256;
-            printf("vouth.w : set motor #%d to holding at %1.3fV\n", channel,voltage_output);
-            amo7_stepper_dac_update(channel-1, 0);
-        }
-    }
-    else if(strcmp(token[0],"vouth.r")==0 && i==2) { //read holding voltage
-        int channel = atoi(token[1]);
-        if (channel <= 12 && channel >=1){
-            double tmp = amo7_holding_voltage[channel-1]*4.096/256;
-            printf("%1.3fV\n", tmp);
-        }
-    }
-    else if(strcmp(token[0],"voutp.w")==0 && i == 3) {  //write pfd voltage
-        AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN);
-        _delay_ms(5);
-        int channel = atoi(token[1]);
-        double tmp = atof(token[2]);
-        if (channel <= 12 && channel >=1){
-            if (tmp >= 4.08) tmp = 4.08;
-            if (tmp < 0) tmp = 0;
-            tmp *= 256/4.096;
-            amo7_pfd_voltage[channel-1] = (int) tmp;
-            double voltage_output = amo7_pfd_voltage[channel-1]*4.096/256;
-            printf("voutp.w : set motor #%d pfd to %1.3fV\n", channel,voltage_output);
-            amo7_stepper_dac_update(amo7_stepper_motor_number, 2);
-        }
-    }
-    else if(strcmp(token[0],"voutp.r")==0 && i==2) { //read pfd voltage
-        int channel = atoi(token[1]);
-        if (channel <= 12 && channel >=1){
-            double tmp = amo7_pfd_voltage[channel-1]*4.096/256;
+            double tmp = 0;
+            if (strcmp(token[2], "m")||strcmp(token[2], "M")){
+                tmp = amo7_moving_voltage[channel-1]*4.096/256;
+            }
+            else if (strcmp(token[2], "h")||strcmp(token[2], "H")){
+                tmp = amo7_holding_voltage[channel-1]*4.096/256;
+            }
+            else if (strcmp(token[2], "p")||strcmp(token[2], "P")){
+                tmp = amo7_pfd_voltage[channel-1]*4.096/256;
+            }
             printf("%1.3fV\n", tmp);
         }
     }
@@ -802,7 +781,7 @@ void amo6_serial_parse ()
         int channel = atoi(token[1]);     
         if (channel <= 12 && channel >=1){
             bool queuedup = false;
-            for(int j=0; j < amo7_queue_index; j++){     //make sure motor isn't queued up
+            for(int j=0; j < amo7_queue_index; j++){  //make sure motor isn't queued up
                 if (channel-1 == amo7_step_queue[j]) queuedup = true;
             }
             if (queuedup == false){
@@ -813,10 +792,13 @@ void amo6_serial_parse ()
                 amo7_step_array[amo7_stepper_motor_number][0] = atoi(move_tmp[0]);
                 for(int j = 1; j <= amo7_max_microstep_number; j++) {
                     move_tmp[j] = strtok(NULL, ",");
-                    if (atoi(move_tmp[j]) <= amo7_max_steps){
-                        amo7_step_array[amo7_stepper_motor_number][j] = atoi(move_tmp[j]);
+                    amo7_step_array[amo7_stepper_motor_number][j] = atoi(move_tmp[j]);
+                }
+                for(int j = 0; j <= amo7_max_microstep_number; j++) {//prevent move too far
+                    if (abs(amo7_step_array[amo7_stepper_motor_number][j]) > amo7_max_steps){
+                        amo7_step_array[amo7_stepper_motor_number][j] = amo7_max_steps;
                     }
-                }     
+                }
                 amo7_move_config();
                 amo7_stepper_motor_number = previous_motor;
                 printf("move.w: motor #%d set to %s,%s,%s,%s\n", channel, move_tmp[0],move_tmp[1],move_tmp[2],move_tmp[3]);
@@ -886,7 +868,7 @@ void amo6_serial_parse ()
         printf("Firmware ID : %s\n", firmware_id);
     }
     else if(strcmp(token[0],"help")==0) {
-        printf("Commands:\nvoutm.w [motor number] [voltage]\nvoutm.r [motor number]\nvouth.w [motor number] [voltage]\nvouth.r [motor number]\nvoutp.w [motor number] [voltage]\nvoutp.r [motor number]\nout.w [motor number] [enable]\nout.r [motor number]\nmove.w [motor number] [full steps,0.5 steps,0.25 steps,0.125 steps]\nmove.r [motor number]\ncalib.w [motor number]\nspeed.w [motor number] [speed]\nspeed.r [motor number]\nid?\n");
+        printf("Commands:\nvout.w [mode] [motor number] [voltage]\nvout.r [mode] [motor number]\nout.w [motor number] [enable]\nout.r [motor number]\nmove.w [motor number] [full steps,0.5 steps,0.25 steps,0.125 steps]\nmove.r [motor number]\ncalib.w [motor number]\nspeed.w [motor number] [speed]\nspeed.r [motor number]\nid?\n");
     }
     else {
         printf("Command not recognized.\nType 'help' for list of commands.\n");
