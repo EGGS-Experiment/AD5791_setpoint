@@ -316,12 +316,13 @@ ISR(TIMER0_COMPA_vect){
     TCCR0B &= ~(_BV(CS02) | _BV(CS00)); //turn off timer
     if (amo7_motors[amo7_step_queue[0]].move_array[amo7_queued_microstep_counter] != 0){
         if (rise){                      //step high
+            printf("up");
             PORTJ |= _BV(amo7_motor_shift);       
             int tmp = amo7_dir_arr[amo7_step_queue[0]][amo7_queued_microstep_counter]? -1:1;
             amo7_motors[amo7_step_queue[0]].move_array[amo7_queued_microstep_counter] += tmp;
         }
-        else {          
-            //step low
+        else {                          //step low
+            printf("down");
             PORTJ &= ~(_BV(amo7_motor_shift));
         }
         /*if (amo7_local_acceleration && OCR0A > ceil(amo7_min_delay_us/TIMER_VAL_TO_us)){
@@ -1358,7 +1359,7 @@ void amo7_move_config (){
             detect_movement = true;
         }
     }
-    if (!detect_movement || amo7_queue_index > 11){        //update move_array and do nothing
+    if (!detect_movement){        //update move_array and do nothing
             for (int i = 0; i <= amo7_max_microstep_number; i++){
                 amo7_motors[amo7_stepper_motor_number].move_array[i] = amo7_motors[amo7_stepper_motor_number].step_array[i];
             }
