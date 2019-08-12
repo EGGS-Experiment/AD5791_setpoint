@@ -322,7 +322,7 @@ ISR(TIMER0_COMPA_vect){
         }
         else {          
             //step low
-            PORTJ &= _BV(amo7_motor_shift);
+            PORTJ &= ~(_BV(amo7_motor_shift));
         }
         /*if (amo7_local_acceleration && OCR0A > ceil(amo7_min_delay_us/TIMER_VAL_TO_us)){
             OCR0A -= 1;
@@ -835,7 +835,7 @@ void amo6_serial_parse ()
             for(int j=0; j < amo7_queue_index; j++){  //make sure motor isn't queued up
                 if (channel-1 == amo7_step_queue[j]) queuedup = true;
             }
-            if (queuedup == false && amo7_queue_index <= 12){
+            if (queuedup == false && amo7_queue_index <= 11){
                 int previous_motor = amo7_stepper_motor_number;
                 amo7_stepper_motor_number = channel-1;
                 char *move_tmp[4];                    //split input into steps
@@ -1288,7 +1288,7 @@ void background_stepping (){
         }
         if (amo7_motors[amo7_step_queue[0]].move_array[amo7_queued_microstep_counter] != 0){
             //enable step interrupt sequence and configure acceleration
-            int ocr_tmp;/*
+            int ocr_tmp;
             if (amo7_global_acceleration){
                 int steps_to_max_and_min = ceil(500 - amo7_motors[amo7_step_queue[0]].speed_delay_us)/TIMER_VAL_TO_us;
                 if (steps_to_max_and_min > amo7_motors[amo7_step_queue[0]].move_array[amo7_queued_microstep_counter]){
@@ -1303,8 +1303,7 @@ void background_stepping (){
             else {
                 ocr_tmp = amo7_motors[amo7_step_queue[0]].speed_delay_us/TIMER_VAL_TO_us;
             }
-            //OCR0A = ocr_tmp;*/
-            OCR0A = 255;
+            OCR0A = ocr_tmp;
             TCCR0B |= 0x05;    //enable timer and set prescaler to 1024
             amo7_motor_moving = true;
         }
@@ -1359,7 +1358,7 @@ void amo7_move_config (){
             detect_movement = true;
         }
     }
-    if (!detect_movement){              //update move_array and do nothing
+    if (!detect_movement || amo7_queue_index > 11){        //update move_array and do nothing
             for (int i = 0; i <= amo7_max_microstep_number; i++){
                 amo7_motors[amo7_stepper_motor_number].move_array[i] = amo7_motors[amo7_stepper_motor_number].step_array[i];
             }
