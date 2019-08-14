@@ -137,7 +137,7 @@ void  amo6_screen_processShortPress  ();
 #define      amo7_min_delay_us              500     //-> max speed = 2k steps/s
 #define      amo7_max_delay_us              16000   //det. by TIMER0 register size (8b)
 #define      amo7_starting_delay_us         2000
-#define      TIMER_VAL_TO_us                128     //Convert timer value to us, = (1e6 (1s in us) * 1024 (prescaler) / 1.6e7 (clock))/ 2 (1:1 high:low)
+#define      amo7_timer_val_to_us                128     //Convert timer value to us, = (1e6 (1s in us) * 1024 (prescaler) / 1.6e7 (clock))/ 2 (1:1 high:low)
 
 struct Individual_Motor {
     Individual_Motor (float angle) {
@@ -189,10 +189,10 @@ volatile int  amo7_steps_to_max_min           ;
 volatile int  accel1;
 
         //Mode options
-volatile bool amo7_manual_mode                = false;
-bool          amo7_global_acceleration        = false;
-bool          amo7_local_acceleration         = false;
-bool          amo7_rounding_mode              = false;
+volatile bool amo7_manual_mode                = false;  //change on enc/sw directly move motors
+bool          amo7_global_acceleration        = false;  //accelerates from starting speed
+bool          amo7_local_acceleration         = false;  //shifts calculation to main loop
+bool          amo7_rounding_mode              = false;  //move to nearest full step
 
 void  amo7_init                  ();
 void amo7_dac_init               ();
@@ -291,7 +291,7 @@ ISR(INT5_vect){ //ENC_TURN
 
 ISR(INT3_vect){     //ENC_SW
     if (amo7_queue_index == 0) amo7_manual_mode = !amo7_manual_mode;//switch to manual mode
-    printf("   manual mode: %d", amo7_manual_mode);
+    printf("   manual mode: %d\n", amo7_manual_mode);
     if (amo7_manual_mode){
         for (int i = 0; i <= amo7_max_stepper_motor_number; i++){   //reset motors if not moved
             amo7_motors[i].step_array[0] = amo7_motors[i].move_array[0];
@@ -330,15 +330,13 @@ ISR(TIMER0_COMPA_vect){
         else {                          //step low
             AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         }
-        if (amo7_local_acceleration){   //adjust acceleration
+        if (amo7_local_acceleration && rise){   //adjust acceleration
             if (accel1 > 0){
-                printf("   accel OCR0A: %x\n", OCR0A);
                 OCR0A -= 1;
                 accel1 -= 1;
             }
-            else if(amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] <= amo7_steps_to_max_min){
+            else if(abs(amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter]) < amo7_steps_to_max_min){
                 OCR0A += 1;
-                printf("   decel OCR0A: %x\n", OCR0A);
             }
         }
         rise = !rise;
@@ -347,7 +345,7 @@ ISR(TIMER0_COMPA_vect){
     else {
         amo7_motor_moving = false;      //stop moving
         AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
-        rise = true;
+        amo7_local_acceleration = false;
     }
 }
 
@@ -1053,6 +1051,12 @@ void amo6_screen_draw () {
     else {
         CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "QUEUED");
     }
+    if (amo7_manual_mode){
+        CleO.RectangleColor(MY_RED);
+        CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
+        CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVING");
+
+    }
     
     //Coarse Steps
     CleO.Tag(coarse_display);
@@ -1335,18 +1339,18 @@ void background_stepping (){
                 amo7_step_queue[i-1][5] = amo7_step_queue[i][5]; 
             }
         }
-        else if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter]!= 0){
-            //configure acceleration
-            int ocr_tmp = amo7_motors[amo7_step_queue[0][0]].speed_delay_us/TIMER_VAL_TO_us;
+        else if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter]!= 0){ //configure acceleration
+            int ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
             if (amo7_global_acceleration){          //configure acceleration
-                amo7_steps_to_max_min = ceil(amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/TIMER_VAL_TO_us;
-                if (2 * amo7_steps_to_max_min > amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter]){
+                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us);
+                if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] > (2 * amo7_steps_to_max_min)){
                     accel1 = amo7_steps_to_max_min;
                     amo7_local_acceleration = true;
                 }
                 else {
                     amo7_local_acceleration = false;
                 }
+                ocr_tmp = round(amo7_starting_delay_us/amo7_timer_val_to_us);
             }
             OCR0A = ocr_tmp;
             amo7_motor_moving = true;
