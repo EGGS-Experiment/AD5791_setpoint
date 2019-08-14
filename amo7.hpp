@@ -48,6 +48,7 @@ const char firmware_id[] = "1.0.0";
 
 #define AMO7_DRV_DAC_PORT   PORTA
 #define AMO7_STEP_PORT      PORTJ
+#define AMO7_BOARD_PORT     PORTC
 
 uint8_t   amo3_save_flag  = 0;
 
@@ -144,10 +145,8 @@ struct Individual_Motor {
         step_size = angle;
     }
     float           step_size       ;
-    /*int16_t         new_step_holder = 0;
-    int16_t         old_step_holder = 0;*/
-    int             step_array[4]   = {0, 0, 0, 0};
-    volatile int    move_array[4]   = {0, 0, 0, 0};
+    int16_t         step_holder     = 0;
+    int16_t         move_holder     = 0;
     int             moving_voltage  = 0;
     int             holding_voltage = 0;
     int             pfd_voltage     = 0;
@@ -176,7 +175,7 @@ int          amo7_microstep_number           = 0;    //Tracks microstepping disp
 int          amo7_stepper_motor_number       = 0;    //Tracks active stepper motor
 
         //Background queue
-volatile int  amo7_step_queue[12][6]          ;       //0=motor num, 1=rounding_steps, 2-5=dir
+volatile int  amo7_step_queue[12][3]          ;       //0=motor num, 1=rounding_steps, 2-5=dir
 int           amo7_queue_index                = 0;    //Tracks how many motors are queued up
 bool          amo7_new_motor                  = false;
 volatile int  amo7_queued_microstep_counter   = false;//Tracks background microstepping
@@ -228,7 +227,7 @@ void amo7_init ()
     DDRJ = 0xf0; //J4-J7 are motor step output
     DDRC = 0x0f; //C0-C3 enable digital isolators, C4-C7 are motor feedback
     AMO7_DRV_DAC_PORT = 0x91;//set A0 (drv_clear), A4 (dac_load), A7 (dac_clear) high
-    PORTC = 0x00;
+    AMO7_BOARD_PORT = 0x00;
     
     // hardware init
         //timers init
@@ -290,14 +289,13 @@ ISR(INT5_vect){ //ENC_TURN
 }
 
 ISR(INT3_vect){     //ENC_SW
-    if (amo7_queue_index == 0) amo7_manual_mode = !amo7_manual_mode;//switch to manual mode
-    printf("   manual mode: %d\n", amo7_manual_mode);
-    if (amo7_manual_mode){
-        for (int i = 0; i <= amo7_max_stepper_motor_number; i++){   //reset motors if not moved
-            amo7_motors[i].step_array[0] = amo7_motors[i].move_array[0];
-            amo7_motors[i].step_array[1] = amo7_motors[i].move_array[1];
-            amo7_motors[i].step_array[2] = amo7_motors[i].move_array[2];
-            amo7_motors[i].step_array[3] = amo7_motors[i].move_array[3];
+    if (amo7_queue_index == 0){
+        amo7_manual_mode = !amo7_manual_mode;//switch to manual mode
+        printf("   manual mode: %d\n", amo7_manual_mode);
+        if (amo7_manual_mode){
+            for (int i = 0; i <= amo7_max_stepper_motor_number; i++){   //reset motors if not moved
+                amo7_motors[i].step_holder = amo7_motors[i].move_holder;
+            }
         }
     }
 }
@@ -321,11 +319,12 @@ ISR(PCINT0_vect){   //SW1 SW2
 
 ISR(TIMER0_COMPA_vect){
     TCCR0B &= ~(_BV(CS02) | _BV(CS00)); //turn off timer
-    if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] != 0){
+    if (amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_microstep_number) != 0){
         if (rise){                      //step high
-            AMO7_STEP_PORT |= _BV(amo7_motor_shift);       
-            int tmp = amo7_step_queue[0][amo7_queued_microstep_counter + 2]? -1:1;
-            amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] += tmp;
+            AMO7_STEP_PORT |= _BV(amo7_motor_shift); 
+            int dir = amo7_step_queue[0][2]? -1:1;
+            int tmp = _BV(3 - amo7_queued_microstep_counter);
+            amo7_motors[amo7_step_queue[0][0]].move_holder += (tmp * dir);
         }
         else {                          //step low
             AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
@@ -335,7 +334,7 @@ ISR(TIMER0_COMPA_vect){
                 OCR0A -= 1;
                 accel1 -= 1;
             }
-            else if(abs(amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter]) < amo7_steps_to_max_min){
+            else if(abs(amo7_motors[amo7_step_queue[0][0]].move_holder >> 3) < amo7_steps_to_max_min){
                 OCR0A += 1;
             }
         }
@@ -343,9 +342,9 @@ ISR(TIMER0_COMPA_vect){
         TCCR0B |= (_BV(CS02) | _BV(CS00));  //turn on timer
     }
     else {
-        amo7_motor_moving = false;      //stop moving
         AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         amo7_local_acceleration = false;
+        amo7_motor_moving = false;      //tell background_stepping to stop
     }
 }
 
@@ -421,10 +420,10 @@ void amo6_buttons_update () {
                     case step_counter	:
                         AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                         _delay_ms(5);
-                        tmp = amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] - 1;
+                        tmp = amo7_motors[amo7_stepper_motor_number].step_holder - _BV(3 - amo7_microstep_number);
                         if (tmp>amo7_max_steps) tmp=amo7_max_steps;
                         if (tmp<(amo7_max_steps*-1)) tmp=(amo7_max_steps*-1);
-                        amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] = tmp;
+                        amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
                         if (amo7_manual_mode) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, -1);
                         break;
                     case stepper_motor_counter         :
@@ -484,10 +483,10 @@ void amo6_buttons_update () {
                     case step_counter	:
                         AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                         _delay_ms(5);
-                        tmp = amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] + 1;
+                        tmp = amo7_motors[amo7_stepper_motor_number].step_holder + _BV(3 - amo7_microstep_number);
                         if (tmp>amo7_max_steps) tmp=amo7_max_steps;
                         if (tmp<(amo7_max_steps*-1)) tmp=(amo7_max_steps*-1);
-                        amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] = tmp;
+                        amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
                         if (amo7_manual_mode) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, 1);
                         break;
                     case stepper_motor_counter         :
@@ -548,10 +547,10 @@ void amo6_buttons_update () {
                 case step_counter               	:
                     AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                     _delay_ms(5);
-                    tmp = amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] + 10;
+                    tmp = amo7_motors[amo7_stepper_motor_number].step_holder + (_BV(3 - amo7_microstep_number))*10;
                     if (tmp>amo7_max_steps) tmp=amo7_max_steps;
                     if (tmp<(amo7_max_steps*-1)) tmp=(amo7_max_steps*-1);
-                    amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] = tmp;
+                    amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
                     if (amo7_manual_mode) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, 10);
                     break;
                 case stepper_motor_counter       	:
@@ -610,10 +609,10 @@ void amo6_buttons_update () {
                 case step_counter	:
                     AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                     _delay_ms(5);
-                    tmp = amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] - 10;
+                    tmp = amo7_motors[amo7_stepper_motor_number].step_holder - 10 * (_BV(3 - amo7_microstep_number));
                     if (tmp>amo7_max_steps) tmp=amo7_max_steps;
                     if (tmp<(amo7_max_steps*-1)) tmp=(amo7_max_steps*-1);
-                    amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] = tmp;
+                    amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
                     if (amo7_manual_mode) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, -10);
                     break;
                 case stepper_motor_counter       	:
@@ -683,7 +682,7 @@ void amo6_buttons_update () {
                     AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
                     _delay_ms(1);
                 }
-                tmp = amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] + val;
+                tmp = amo7_motors[amo7_stepper_motor_number].step_holder + val * (_BV(3 - amo7_microstep_number));
                 if (tmp>amo7_max_steps) {
                     tmp=amo7_max_steps;
                     val = 0;
@@ -692,7 +691,7 @@ void amo6_buttons_update () {
                     tmp=(amo7_max_steps*-1);
                     val = 0;
                 }
-                amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number] = tmp;
+                amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
                 if (amo7_manual_mode) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, val);
                 break;
             case stepper_motor_counter    	:
@@ -861,16 +860,16 @@ void amo6_serial_parse ()
             if (queuedup == false && amo7_queue_index <= 11){
                 char *move_tmp[4];                    //split input into steps
                 move_tmp[0] = strtok(token[2], ",");
-                amo7_motors[amo7_stepper_motor_number].step_array[0] = atoi(move_tmp[0]);
+                //amo7_motors[amo7_stepper_motor_number].step_array[0] = atoi(move_tmp[0]);
                 for(int j = 1; j <= amo7_max_microstep_number; j++) {
                     move_tmp[j] = strtok(NULL, ",");
-                    amo7_motors[amo7_stepper_motor_number].step_array[j] = atoi(move_tmp[j]);
+                    //amo7_motors[amo7_stepper_motor_number].step_array[j] = atoi(move_tmp[j]);
                 }
-                for(int j = 0; j <= amo7_max_microstep_number; j++) {//prevent move too far
+                /*for(int j = 0; j <= amo7_max_microstep_number; j++) {//prevent move too far
                     if (abs(amo7_motors[amo7_stepper_motor_number].step_array[j]) > amo7_max_steps){
                         amo7_motors[amo7_stepper_motor_number].step_array[j] = amo7_max_steps;
                     }
-                }
+                }*/
                 amo7_move_config(channel-1);
                 printf("move.w: motor #%d set to %s, %s, %s, %s\n", channel, move_tmp[0],move_tmp[1],move_tmp[2],move_tmp[3]);
             }
@@ -882,11 +881,8 @@ void amo6_serial_parse ()
     else if(strcmp(token[0],"move.r")==0 && i == 2) { //read step array
         int channel = atoi(token[1]);
         if (channel <= 12 && channel >=1){
-            printf("%d steps: %d", 1, amo7_motors[channel-1].step_array[0]);
-            for (int j = 1; j<= amo7_max_microstep_number; j++){
-                printf(" , %0.3f steps: %d", pow(2,-j), amo7_motors[channel-1].step_array[j]);
-            }
-            printf("\n");
+            int microsteps_tmp = amo7_motors[channel-1].step_holder & 0x7;
+            printf("full steps: %d, eighth steps: %d\n", amo7_motors[channel-1].step_holder >> 3, microsteps_tmp);
         }
     }
     else if(strcmp(token[0],"calib.w")==0 && i == 2) {  //calibrate array
@@ -899,10 +895,8 @@ void amo6_serial_parse ()
                 if (channel-1 == amo7_step_queue[j][0]) queuedup = true;
             }
             if (queuedup == false){
-                for (int k=0; k<=amo7_max_microstep_number; k++){ //reset step array of motor
-                    amo7_motors[channel-1].move_array[k] = 0;
-                    amo7_motors[channel-1].step_array[k] = 0;
-                }
+                amo7_motors[channel-1].move_holder = 0;
+                amo7_motors[channel-1].step_holder = 0;
                 printf("calib.w : calibrated motor #%d\n", channel);
             }
             else {
@@ -1054,7 +1048,7 @@ void amo6_screen_draw () {
     if (amo7_manual_mode){
         CleO.RectangleColor(MY_RED);
         CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 240-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
-        CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVING");
+        CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "MANUAL");
 
     }
     
@@ -1062,10 +1056,7 @@ void amo6_screen_draw () {
     CleO.Tag(coarse_display);
     CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-    double total_angle=0;
-    for (int i=0;i<=amo7_max_microstep_number;i++){
-        total_angle +=amo7_motors[amo7_stepper_motor_number].step_array[i]* (amo7_motors[amo7_stepper_motor_number].step_size/(1<<i));
-    }
+    double total_angle = amo7_motors[amo7_stepper_motor_number].step_holder * amo7_motors[amo7_stepper_motor_number].step_size/8;
     sprintf(text_buf, "%.2f", total_angle);
     if (abs(total_angle) >= 1000){
         CleO.StringExt(FONT_SANS_4, 459, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
@@ -1085,14 +1076,17 @@ void amo6_screen_draw () {
     CleO.Tag(step_counter);
     CleO.RectangleColor(amo6_screen_select[step_counter] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-    sprintf(text_buf, "%d", amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number]);
-    if (abs(amo7_motors[amo7_stepper_motor_number].step_array[amo7_microstep_number]) >= 1000){
-        CleO.StringExt(FONT_SANS_4, 248, 46, amo6_screen_text_color, MR, 0, 0, text_buf);
-    }
-    else {
+    int fullsteps_tmp = amo7_motors[amo7_stepper_motor_number].step_holder >> 3;
+    sprintf(text_buf, "%d", fullsteps_tmp);
+    if (abs(fullsteps_tmp) < 1000){
         CleO.StringExt(FONT_SANS_5, 248, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
-    CleO.StringExt(FONT_SANS_2, 280, 40+8, amo6_screen_text_color, MM, 0, 0, "steps");
+    else {
+        CleO.StringExt(FONT_SANS_4, 248, 46, amo6_screen_text_color, MR, 0, 0, text_buf);
+    }
+    sprintf(text_buf, "%d/8", amo7_motors[amo7_stepper_motor_number].step_holder & 0x7);
+    CleO.StringExt(FONT_SANS_3, 290, 40+4, amo6_screen_text_color, MR, 0, 0, text_buf);
+    CleO.StringExt(FONT_SANS_2, 305, 40+8, amo6_screen_text_color, MR, 0, 0, "s");
     
     //Fine Step Adjustment
     CleO.Tag(fine_step_adjustment);
@@ -1188,10 +1182,8 @@ void amo6_screen_processShortPress () {
             for(i=0;i<calibrate_button;i++) amo6_screen_select[i]=0;
             for(i=calibrate_button+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
             if (amo7_motors[amo7_stepper_motor_number].enable){
-                for (i=0; i<=amo7_max_microstep_number; i++){ //reset step array of motor
-                    amo7_motors[amo7_stepper_motor_number].move_array[i] = 0;
-                    amo7_motors[amo7_stepper_motor_number].step_array[i] = 0;
-                }
+                amo7_motors[amo7_stepper_motor_number].move_holder = 0;
+                amo7_motors[amo7_stepper_motor_number].step_holder = 0;
             }
             break;
         case coarse_display	:
@@ -1292,9 +1284,9 @@ void background_stepping (){
         if (amo7_new_motor){                 
             printf("   new motor\n");
             amo7_stepper_dac_update(amo7_step_queue[0][0], 1);     //change to moving voltage
-            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][amo7_queued_microstep_counter + 2], amo7_queued_microstep_counter);
             amo7_new_motor = false;
             if (amo7_rounding_mode) {       //move rounding steps
+                printf("   rounding: %d\n", amo7_step_queue[0][1]);
                 if (amo7_step_queue[0][1] > 0) {
                     amo7_motor_config(amo7_step_queue[0][0], 1, 3);
                 }
@@ -1303,47 +1295,42 @@ void background_stepping (){
                 }
                 amo7_step_queue[0][1] = abs(amo7_step_queue[0][1]); //okay b/c new motor
                 while (amo7_step_queue[0][1]){
-                    printf("   rounding");
                     AMO7_STEP_PORT |= _BV(amo7_motor_shift);
                     _delay_ms(amo7_starting_delay_us/1000);
                     AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
                     amo7_step_queue[0][1] -= 1;
                 }
             }
+            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], 0);//config after
         }
-        if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] == 0 && (amo7_queued_microstep_counter < amo7_max_microstep_number)) {  //set new microstep
+        int current_steps = amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter);
+        if (current_steps == 0 && (amo7_queued_microstep_counter < amo7_max_microstep_number)) {                                        //set new microstep
             amo7_queued_microstep_counter += 1;
-            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][amo7_queued_microstep_counter + 2], amo7_queued_microstep_counter);
+            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], amo7_queued_microstep_counter);
             printf("   new microstep: %d\n", amo7_queued_microstep_counter);
         }
-        else if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] == 0 && amo7_queued_microstep_counter >= amo7_max_microstep_number){
-            //end of current motor, reset & move on
+        else if (current_steps == 0 && amo7_queued_microstep_counter >= amo7_max_microstep_number){              //end of current motor, reset
+            TCCR0B &= 0xf0;
             printf("   end of motor\n");
-            TCCR0B &= 0xf0;     //disable timer
-            for (int k = 0; k <= amo7_max_microstep_number; k++){
-                amo7_motors[amo7_step_queue[0][0]].move_array[k] = amo7_motors[amo7_step_queue[0][0]].step_array[k];
-            }
+            amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_motors[amo7_step_queue[0][0]].step_holder;
             //update queue
             amo7_motors[amo7_step_queue[0][0]].enable = true;
-            amo7_step_queue[0][0] = 0;
             amo7_queued_microstep_counter = 0;
-            amo7_queue_index -= 1;
+            amo7_new_motor = true;
             amo7_stepper_dac_update(amo7_step_queue[0][0], 0);
-            if (amo7_queue_index != 0) amo7_new_motor = true;
-            for (int i = 1; i<= amo7_queue_index; i++){
-                amo7_step_queue[i-1][0] = amo7_step_queue[i][0];    //update motor num
-                amo7_step_queue[i-1][1] = amo7_step_queue[i][1];    //update rounding steps
-                amo7_step_queue[i-1][2] = amo7_step_queue[i][2];    //update direction
-                amo7_step_queue[i-1][3] = amo7_step_queue[i][3];
-                amo7_step_queue[i-1][4] = amo7_step_queue[i][4]; 
-                amo7_step_queue[i-1][5] = amo7_step_queue[i][5]; 
+            for (int i = 0; i < amo7_queue_index; i++){
+                amo7_step_queue[i][0] = amo7_step_queue[i+1][0];    //update motor num
+                amo7_step_queue[i][1] = amo7_step_queue[i+1][1];    //update rounding steps
+                amo7_step_queue[i][2] = amo7_step_queue[i+1][2];    //update direction
             }
+            amo7_queue_index -= 1;
         }
-        else if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter]!= 0){ //configure acceleration
+        else if (current_steps != 0){   //step
             int ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
-            if (amo7_global_acceleration){          //configure acceleration
+            //config accel
+            if (amo7_global_acceleration && amo7_queued_microstep_counter == 0){
                 amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us);
-                if (amo7_motors[amo7_step_queue[0][0]].move_array[amo7_queued_microstep_counter] > (2 * amo7_steps_to_max_min)){
+                if (current_steps > (2 * amo7_steps_to_max_min)){
                     accel1 = amo7_steps_to_max_min;
                     amo7_local_acceleration = true;
                 }
@@ -1361,10 +1348,10 @@ void background_stepping (){
 
 void amo7_board_config(int motor_num) {
     uint8_t board_num = (motor_num-(motor_num%3))/3;
-    uint8_t c_config = PORTC;    //C4-C7 are input, so maintain their values
+    uint8_t c_config = AMO7_BOARD_PORT;    //C4-C7 are input, so maintain their values
     c_config |= 0x0f;
     c_config &= ~(_BV(board_num));
-    PORTC = c_config;           
+    AMO7_BOARD_PORT = c_config;           
 }
 
 void amo7_motor_config(int motor_num, bool dir, int msn) {
@@ -1397,40 +1384,26 @@ void amo7_motor_config(int motor_num, bool dir, int msn) {
 }
 
 void amo7_move_config (int motor_num){
-    if (!amo7_manual_mode){
-        int rounding_steps = 0;
-        bool detect_movement = false;
-        for (int i = 0; i <= amo7_max_microstep_number; i++){
-            amo7_motors[motor_num].move_array[i] = amo7_motors[motor_num].step_array[i]-amo7_motors[motor_num].move_array[i];
-            rounding_steps += amo7_motors[motor_num].step_array[i]*(8>>i);
-            rounding_steps %= 8;
-            if (amo7_motors[motor_num].move_array[i] != 0){
-                detect_movement = true;
-            }
-        }
-        if (!detect_movement || amo7_queue_index > 11){ //update move_array and do nothing
-            for (int i = 0; i <= amo7_max_microstep_number; i++){
-                amo7_motors[motor_num].move_array[i] = amo7_motors[motor_num].step_array[i];
-            }
+    if (!amo7_manual_mode){                             //do nothing if in manual mode
+        uint8_t rounding_steps;
+        amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder - amo7_motors[motor_num].move_holder;
+        if (amo7_motors[motor_num].move_holder == 0){   //reset move_holder and exit
+            amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder;
             return;
-        }
-        if (rounding_steps != 0 && amo7_rounding_mode){ //add rounding steps
-            amo7_step_queue[amo7_queue_index][1] = rounding_steps;
-            amo7_motors[motor_num].move_array[3] += rounding_steps;
-        }
-        for (int i = 0; i <= amo7_max_microstep_number; i++){ //set direction
-            amo7_step_queue[amo7_queue_index][i + 2] = amo7_motors[motor_num].move_array[i]>0 ? true:false;
-        }
+        }                                          
+        rounding_steps = abs(amo7_motors[motor_num].move_holder) & 0x07;//assign rounding steps
+        amo7_motors[motor_num].move_holder -= rounding_steps;
+        amo7_motors[motor_num].enable = false;          //stops further instructions to motor
         //update queue
-        amo7_motors[motor_num].enable = 0;
-        amo7_step_queue[amo7_queue_index][0] = motor_num; 
-        if (amo7_queue_index == 0) amo7_new_motor = true;
+        amo7_step_queue[amo7_queue_index][0] = motor_num;
+        amo7_step_queue[amo7_queue_index][1] = rounding_steps;
+        amo7_step_queue[amo7_queue_index][2] = amo7_motors[motor_num].move_holder>0 ? true:false;
         amo7_queue_index += 1;
     }
 }
 
 void amo7_manual_stepping (int motor_num, int ms, int steps) {
-    amo7_motors[motor_num].move_array[ms] += steps;
+    amo7_motors[motor_num].move_holder += steps;
     amo7_motor_shift = (motor_num % 3) + 4;
     if (steps > 0) {
         amo7_motor_config(motor_num, 1, ms);
