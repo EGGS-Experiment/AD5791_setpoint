@@ -14,7 +14,7 @@
 const char device_name[] = "Stepper Motor Controller";
 const char device_id[]   = "AMO7";
 const char hardware_id[] = "1.0.0";
-const char firmware_id[] = "1.0.0";
+const char firmware_id[] = "1.1.0";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -177,7 +177,7 @@ int          amo7_stepper_motor_number       = 0;    //Tracks active stepper mot
         //Background queue
 volatile int  amo7_step_queue[12][3]          ;       //0=motor num, 1=rounding_steps, 2-5=dir
 int           amo7_queue_index                = 0;    //Tracks how many motors are queued up
-bool          amo7_new_motor                  = false;
+bool          amo7_new_motor                  = true;
 volatile int  amo7_queued_microstep_counter   = false;//Tracks background microstepping
 
         //Interrupt stepping
@@ -319,12 +319,11 @@ ISR(PCINT0_vect){   //SW1 SW2
 
 ISR(TIMER0_COMPA_vect){
     TCCR0B &= ~(_BV(CS02) | _BV(CS00)); //turn off timer
-    if (amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_microstep_number) != 0){
+    if (amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter) != 0) {
         if (rise){                      //step high
             AMO7_STEP_PORT |= _BV(amo7_motor_shift); 
-            int dir = amo7_step_queue[0][2]? -1:1;
             int tmp = _BV(3 - amo7_queued_microstep_counter);
-            amo7_motors[amo7_step_queue[0][0]].move_holder += (tmp * dir);
+            amo7_motors[amo7_step_queue[0][0]].move_holder -= tmp;
         }
         else {                          //step low
             AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
@@ -334,7 +333,7 @@ ISR(TIMER0_COMPA_vect){
                 OCR0A -= 1;
                 accel1 -= 1;
             }
-            else if(abs(amo7_motors[amo7_step_queue[0][0]].move_holder >> 3) < amo7_steps_to_max_min){
+            else if(amo7_motors[amo7_step_queue[0][0]].move_holder >> 3 < amo7_steps_to_max_min){
                 OCR0A += 1;
             }
         }
@@ -1085,7 +1084,7 @@ void amo6_screen_draw () {
         CleO.StringExt(FONT_SANS_4, 248, 46, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
     sprintf(text_buf, "%d/8", amo7_motors[amo7_stepper_motor_number].step_holder & 0x7);
-    CleO.StringExt(FONT_SANS_3, 290, 40+4, amo6_screen_text_color, MR, 0, 0, text_buf);
+    CleO.StringExt(FONT_SANS_3, 290, 40+5, amo6_screen_text_color, MR, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 305, 40+8, amo6_screen_text_color, MR, 0, 0, "s");
     
     //Fine Step Adjustment
@@ -1287,6 +1286,7 @@ void background_stepping (){
             amo7_new_motor = false;
             if (amo7_rounding_mode) {       //move rounding steps
                 printf("   rounding: %d\n", amo7_step_queue[0][1]);
+                amo7_motors[amo7_step_queue[0][0]].move_holder -= amo7_step_queue[0][1];
                 if (amo7_step_queue[0][1] > 0) {
                     amo7_motor_config(amo7_step_queue[0][0], 1, 3);
                 }
@@ -1391,13 +1391,13 @@ void amo7_move_config (int motor_num){
             amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder;
             return;
         }                                          
-        rounding_steps = abs(amo7_motors[motor_num].move_holder) & 0x07;//assign rounding steps
-        amo7_motors[motor_num].move_holder -= rounding_steps;
+        rounding_steps = abs(amo7_motors[motor_num].move_holder) & 0x7;//assign rounding steps
         amo7_motors[motor_num].enable = false;          //stops further instructions to motor
         //update queue
         amo7_step_queue[amo7_queue_index][0] = motor_num;
         amo7_step_queue[amo7_queue_index][1] = rounding_steps;
         amo7_step_queue[amo7_queue_index][2] = amo7_motors[motor_num].move_holder>0 ? true:false;
+        amo7_motors[motor_num].move_holder = abs(amo7_motors[motor_num].move_holder);
         amo7_queue_index += 1;
     }
 }
