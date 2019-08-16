@@ -36,20 +36,21 @@ const char firmware_id[] = "1.1.0";
 #define AMO3_PWR_nOK_DDR   	DDRH
 #define AMO3_PWR_nOK_PORT  	PORTH
 
-#define AMO7_DRV_CLEAR      PA0
-#define AMO7_DRV_CLOCK      PA1
-#define AMO7_DRV_LOAD       PA2
-#define AMO7_DRV_INPUT      PA3    
+#define AMO7_DRV_CLEAR      PJ1
+#define AMO7_DRV_CLOCK      PJ0
+#define AMO7_DRV_LOAD       PJ3
+#define AMO7_DRV_INPUT      PJ2    
 
-#define AMO7_DAC_LOAD       PA4
-#define AMO7_DAC_CLOCK      PA5
-#define AMO7_DAC_INPUT      PA6
-#define AMO7_DAC_CLEAR      PA7
+#define AMO7_DAC_LOAD       PJ5
+#define AMO7_DAC_CLOCK      PJ4
+#define AMO7_DAC_INPUT      PJ7
+#define AMO7_DAC_CLEAR      PJ6
 
-#define AMO7_DRV_DAC_PORT   PORTA
-#define AMO7_STEP_PORT      PORTJ
-#define AMO7_BOARD_PORT     PORTC
-#define AMO7_FEEDBACK_PORT  PORTC
+#define AMO7_DRV_DAC_PORT   PORTJ
+#define AMO7_STEP_PORT      PORTA
+#define AMO7_BOARD_PORT     PORTK
+#define AMO7_FEEDBACK_PORT1 PORTA
+#define AMO7_FEEDBACK_PORT2 PORTC
 
 uint8_t   amo3_save_flag  = 0;
 
@@ -199,7 +200,7 @@ bool          amo7_rounding_mode              = false;  //move to nearest full s
 void amo7_init                   ();
 void amo7_dac_init               ();
 void amo7_stepper_dac_update     (int motor_num, int mode);
-void amo7_board_config           (int motor_num);
+void amo7_board_config           (int motor_num, bool in);
 void amo7_motor_config           (int motor_num, bool dir, int msn);
 void amo7_move_config            (int motor_num);
 void amo7_manual_stepping        (int motor_num, int ms, int steps);
@@ -226,23 +227,24 @@ void amo7_init ()
     AMO6_BUZZER_nEN_DDR  |=  _BV(AMO6_BUZZER_nEN); //output
     AMO6_BUZZER_nEN_PORT |=  _BV(AMO6_BUZZER_nEN); //1
     
-    DDRA = 0xff; //AMO7_DRV_DAC_PORT is shift register & DAC
-    DDRJ = 0xf0; //J4-J7 are motor step output
-    DDRC = 0x0f; //C0-C3 enable digital isolators, C4-C7 are motor feedback
+    DDRJ = 0xff; //AMO7_DRV_DAC_PORT is shift register & DAC
+    DDRA = 0xf0; //A0-A3 is motor 1 feedback, A4-A7 are motor step output
+    DDRC = 0x0f; //C0-C3 enable input dig. iso., C4-C7 enable feedback dig. iso.
+    DDRC = 0xff; //PORTK is all feedback
     
     // hardware init
         //timers init
     TCCR0A |= _BV(WGM01);  //set CTC mode
     TIMSK0 |= _BV(OCIE0A); //enable OCR0A match interrupt
         
-    AMO7_DRV_DAC_PORT   = 0x91;//set A0 (drv_clear), A4 (dac_load), A7 (dac_clear) high
+    AMO7_DRV_DAC_PORT   = 0x62;//set J1 (drv_clear), J5 (dac_load), J6 (dac_clear), high
     AMO7_BOARD_PORT     = 0x00;
     
     amo6_screen_init();
     amo6_buttons_init();
     amo7_dac_init();
     _delay_ms(10);
-    amo7_board_config(0); //start at board 0, motor 0
+    amo7_board_config(0, true); //start at board 0, motor 0
 }
 
 // Buttons (AMO6)
@@ -1250,7 +1252,7 @@ void amo7_dac_init(){
 void amo7_stepper_dac_update (int motor_num, int mode) {
     uint16_t dac_input = 0x3000;        //command code 0011
     uint8_t address_code = 2*(motor_num % 3);
-    amo7_board_config(motor_num);
+    amo7_board_config(motor_num, true);
     switch (mode){                      //mode: 0 = holding, 1 = moving, 2 = pfd
         case 0:
             dac_input |= amo7_motors[motor_num].holding_voltage;   
@@ -1340,12 +1342,27 @@ void background_stepping (){
     }
 }
 
-void amo7_board_config(int motor_num) {
-    uint8_t board_num = (motor_num-(motor_num % 3))/3;
-    uint8_t c_config = AMO7_BOARD_PORT;    //C4-C7 are input, so maintain their values
-    c_config |= 0x0f;
-    c_config &= ~(_BV(board_num));
-    AMO7_BOARD_PORT = c_config;           
+void amo7_board_config(int motor_num, bool in) {
+    uint8_t board_num = 0;
+    int io_shift = in? 0:4;                     //K0-K3 = in boards, K4-K7 = out boards
+    uint8_t board_select = AMO7_BOARD_PORT;
+    switch ((motor_num-(motor_num % 3))/3) {
+        case 0:
+            board_num = 1 + io_shift;
+            break;
+        case 1:
+            board_num = 0 + io_shift;
+            break;
+        case 2:
+            board_num = 3 + io_shift;
+            break;
+        case 3:
+            board_num = 2 + io_shift;
+            break;
+    }
+    board_select |= in? 0x0f:0xf0;
+    board_select &= ~(_BV(board_num));
+    AMO7_BOARD_PORT = board_select;           
 }
 
 void amo7_motor_config(int motor_num, bool dir, int msn) {
@@ -1353,10 +1370,20 @@ void amo7_motor_config(int motor_num, bool dir, int msn) {
     int motor_on_board = motor_num % 3;
     int ms_shift = 14 - 5*(motor_on_board);  //Shifts microstepping to appropriate pin output
     int board_num_min = motor_num-(motor_on_board);
-    amo7_board_config(motor_num);
+    amo7_board_config(motor_num, true);
     reg_input |= msn<<ms_shift;
     reg_input |= dir<<(ms_shift-1);
-    amo7_motor_shift = motor_on_board + 4;    
+    switch (motor_on_board){            //assign step port
+        case 0:
+            amo7_motor_shift = 5;
+            break;
+        case 1:
+            amo7_motor_shift = 4;
+            break;
+        case 2:
+            amo7_motor_shift = 7;
+            break;
+    }
     for (int i = board_num_min; i <= board_num_min+2; i++){ //enable ON motors within board
         if (amo7_motors[i].power){             
             reg_input &= ~(_BV(12-5*(i%3))); 
@@ -1397,7 +1424,18 @@ void amo7_move_config (int motor_num){
 }
 
 void amo7_manual_stepping (int motor_num, int ms, int steps) {
-    int tmp_motor_shift = (motor_num % 3) + 4;
+    int tmp_motor_shift = 0;
+    switch (motor_num % 3){         //assign step port
+        case 0:
+            tmp_motor_shift = 5;
+            break;
+        case 1:
+            tmp_motor_shift = 4;
+            break;
+        case 2:
+            tmp_motor_shift = 7;
+            break;
+    }
     amo7_motors[motor_num].move_holder += steps;
     if (steps > 0) {
         amo7_motor_config(motor_num, 1, ms);
@@ -1416,13 +1454,29 @@ void amo7_manual_stepping (int motor_num, int ms, int steps) {
 }
 
 void amo7_waveplate_calib (int motor_num){
-    int motor_feedback_pin = motor_num % 3;
-    bool calibrated = (PORTC & _BV(motor_feedback_pin));
-    amo7_board_config(motor_num);
-    while (!calibrated){
+    volatile uint8_t *port = 0;
+    int sensor_pin = 0;
+    switch (motor_num % 3){
+        case 0:
+            port = &AMO7_FEEDBACK_PORT1;
+            sensor_pin = 1;
+            break;
+        case 1:
+            port = &AMO7_FEEDBACK_PORT2;
+            sensor_pin = 6;
+            break;
+        case 2:
+            port = &AMO7_FEEDBACK_PORT2;
+            sensor_pin = 2;
+            break;
+    }
+    amo7_board_config(motor_num, true);     //set up motor control
+    amo7_board_config(motor_num, false);    //set up motor feedback
+    bool calibrated = (*port & _BV(sensor_pin));
+    while (!calibrated){                    //step until sensor is high
         amo7_manual_stepping(motor_num, 0, 1);
         _delay_ms(5);
-        calibrated = PORTC & _BV(motor_feedback_pin);
+        calibrated = *port & _BV(sensor_pin);
     }
     amo7_motors[motor_num].step_holder = 0;
     amo7_motors[motor_num].move_holder = 0;
