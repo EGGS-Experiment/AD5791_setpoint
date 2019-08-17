@@ -137,10 +137,10 @@ void  amo6_screen_processShortPress  ();
 #define      amo7_max_microstep_number      3
 #define      amo7_max_steps                 8000
 #define      amo7_max_V                     255
-#define      amo7_min_delay_us              8       //-> max speed = 2k steps/s
-#define      amo7_max_delay_us              65000   //det. by timer register size (8b)
+#define      amo7_min_delay_us              100     //-> max speed = 10k steps/s
+#define      amo7_max_delay_us              65000   //det. by timer register size (16b)
 #define      amo7_starting_delay_us         2000
-#define      amo7_timer_val_to_us           0.25    //Convert timer value to us, = (1e6 (1s in us) * 8 (prescaler) / 1.6e7 (clock))/ 2 (1:1 high:low)
+#define      amo7_timer_val_to_us           1       //Convert timer value to us, = (1e6 (1s in us) * 8 (prescaler) / 1.6e7 (clock)) * 2 (1:1 high:low)
 
 struct Individual_Motor {
     Individual_Motor (float angle, bool feedback) {
@@ -189,7 +189,7 @@ volatile bool amo7_motor_moving               = false;
 volatile int  amo7_motor_shift                ;
 volatile long amo7_steps_to_max_min           ;
 volatile bool rise                            = true;
-volatile int  accel1                          ;
+volatile long accel1                          ;
 
         //Mode options
 volatile bool amo7_manual_mode                = false;  //change on enc/sw directly move motors
