@@ -135,12 +135,12 @@ void  amo6_screen_processShortPress  ();
         //Global constants
 #define      amo7_max_stepper_motor_number  11
 #define      amo7_max_microstep_number      3
-#define      amo7_max_steps                 5000
+#define      amo7_max_steps                 8000
 #define      amo7_max_V                     255
-#define      amo7_min_delay_us              500     //-> max speed = 2k steps/s
-#define      amo7_max_delay_us              16000   //det. by TIMER0 register size (8b)
+#define      amo7_min_delay_us              8       //-> max speed = 2k steps/s
+#define      amo7_max_delay_us              65000   //det. by timer register size (8b)
 #define      amo7_starting_delay_us         2000
-#define      amo7_timer_val_to_us                128     //Convert timer value to us, = (1e6 (1s in us) * 1024 (prescaler) / 1.6e7 (clock))/ 2 (1:1 high:low)
+#define      amo7_timer_val_to_us           0.25    //Convert timer value to us, = (1e6 (1s in us) * 8 (prescaler) / 1.6e7 (clock))/ 2 (1:1 high:low)
 
 struct Individual_Motor {
     Individual_Motor (float angle, bool feedback) {
@@ -156,7 +156,7 @@ struct Individual_Motor {
     int             pfd_voltage     = 0;
     bool            power           = false;
     bool            enable          = true;
-    int             speed_delay_us  = amo7_starting_delay_us;
+    long            speed_delay_us  = amo7_starting_delay_us;
 };
 
 Individual_Motor amo7_motors[12] {
@@ -187,7 +187,7 @@ volatile int  amo7_queued_microstep_counter   = false;//Tracks background micros
         //Interrupt stepping
 volatile bool amo7_motor_moving               = false;
 volatile int  amo7_motor_shift                ;
-volatile int  amo7_steps_to_max_min           ;
+volatile long amo7_steps_to_max_min           ;
 volatile bool rise                            = true;
 volatile int  accel1                          ;
 
@@ -234,8 +234,8 @@ void amo7_init ()
     
     // hardware init
         //timers init
-    TCCR0A |= _BV(WGM01);  //set CTC mode
-    TIMSK0 |= _BV(OCIE0A); //enable OCR0A match interrupt
+    TCCR1B |= _BV(WGM12);  //set CTC mode
+    TIMSK1 |= _BV(OCIE1A); //enable OCR1A match interrupt
         
     AMO7_DRV_DAC_PORT   = 0x62;//set J1 (drv_clear), J5 (dac_load), J6 (dac_clear), high
     AMO7_BOARD_PORT     = 0x00;
@@ -323,8 +323,8 @@ ISR(PCINT0_vect){   //SW1 SW2
     sw2_old = sw2_now;
 }
 
-ISR(TIMER0_COMPA_vect){
-    TCCR0B &= ~(_BV(CS02) | _BV(CS00)); //turn off timer
+ISR(TIMER1_COMPA_vect){
+    TCCR1B &= ~(_BV(CS11)); //turn off timer
     if (amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter) != 0) {
         if (rise){                      //step high
             AMO7_STEP_PORT |= _BV(amo7_motor_shift); 
@@ -335,16 +335,21 @@ ISR(TIMER0_COMPA_vect){
             AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         }
         if (amo7_local_acceleration && rise){   //adjust acceleration
+            uint16_t ocr1a_tmp = (OCR1AH << 8) | (OCR1AL);  //load OCR1A value
             if (accel1 > 0){
-                OCR0A -= 1;
+                ocr1a_tmp -= 1;
+                OCR1AH = (ocr1a_tmp >> 8);
+                OCR1AL = (ocr1a_tmp & 0xff);
                 accel1 -= 1;
             }
-            else if(amo7_motors[amo7_step_queue[0][0]].move_holder >> 3 < amo7_steps_to_max_min){
-                OCR0A += 1;
+            else if((amo7_motors[amo7_step_queue[0][0]].move_holder >> 3) < amo7_steps_to_max_min){
+                ocr1a_tmp += 1;
+                OCR1AH = (ocr1a_tmp >> 8);
+                OCR1AL = (ocr1a_tmp & 0xff);
             }
         }
         rise = !rise;
-        TCCR0B |= (_BV(CS02) | _BV(CS00));  //turn on timer
+        TCCR1B |= _BV(CS11);  //turn on timer
     }
     else {
         AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
@@ -915,7 +920,7 @@ void amo6_serial_parse ()
             tmp = 1000000/tmp;
             if (tmp > amo7_max_delay_us) tmp = amo7_max_delay_us;
             if (tmp < amo7_min_delay_us) tmp = amo7_min_delay_us;
-            amo7_motors[channel-1].speed_delay_us = (int) tmp;
+            amo7_motors[channel-1].speed_delay_us = (long) tmp;
             double speed = 1000000/amo7_motors[channel-1].speed_delay_us;
             printf("speed.w : set motor #%d speed to %.2lf steps/s\n", channel, speed);
         }
@@ -1306,7 +1311,7 @@ void background_stepping (){
             printf("   new microstep: %d\n", amo7_queued_microstep_counter);
         }
         else if (current_steps == 0 && amo7_queued_microstep_counter >= amo7_max_microstep_number){              //end of current motor, reset
-            TCCR0B &= 0xf0;
+            TCCR1B &= 0xf8;
             printf("   end of motor\n");
             amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_motors[amo7_step_queue[0][0]].step_holder;
             //update queue
@@ -1322,7 +1327,8 @@ void background_stepping (){
             amo7_queue_index -= 1;
         }
         else if (current_steps != 0){   //step
-            int ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
+            uint16_t ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
+            printf("   ocr_tmp: %d\n", ocr_tmp);
             //config accel
             if (amo7_global_acceleration && amo7_queued_microstep_counter == 0){
                 amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us);
@@ -1335,9 +1341,10 @@ void background_stepping (){
                 }
                 ocr_tmp = round(amo7_starting_delay_us/amo7_timer_val_to_us);
             }
-            OCR0A = ocr_tmp;
+            OCR1AH = ocr_tmp >> 8;
+            OCR1AL = ocr_tmp & 0xff;
             amo7_motor_moving = true;
-            TCCR0B |= 0x05;    //enable timer and set prescaler to 1024
+            TCCR1B |= _BV(CS11);    //enable timer and set prescaler to 8
         }
     }
 }
