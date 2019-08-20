@@ -156,12 +156,13 @@ void  amo6_screen_processShortPress  ();
         //Global constants
 #define      amo7_max_stepper_motor_number  11
 #define      amo7_max_microstep_number      3
-#define      amo7_max_holder_val            32000   //4000 << 3
+#define      amo7_max_holder_val            32000   //4000 << 3, too high = overflow
 #define      amo7_max_V                     255
 #define      amo7_min_delay_us              100     //-> max speed = 10k steps/s
 #define      amo7_max_delay_us              65000   //det. by timer register size (16b)
 #define      amo7_starting_delay_us         2000
-#define      amo7_timer_val_to_us           1       //Convert timer value to us, = (1e6 (1s in us) * 8 (prescaler) / 1.6e7 (clock)) * 2 (1:1 high:low)
+#define      amo7_timer_val_to_us           1       //Convert timer value to us, = 1e6 (1s in us) * 8 (prescaler) * 2 (1:1 high:low) / 1.6e7 (clock)
+#define      amo7_accel_rate                5       //shorten delay by 2*5us/s (bc up&down)
 
 struct Individual_Motor {
     Individual_Motor (float angle, bool feedback) {
@@ -307,7 +308,6 @@ ISR(INT1_vect, ISR_ALIASOF(INT5_vect)); //map ENC_B to unused INT5
 ISR(INT5_vect){ //ENC_TURN
     static uint8_t old_AB = 0;  //lookup table index  
     static const int8_t enc_states[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};  //encoder lookup table
-    
     old_AB <<= 2;  //store previous state
     old_AB |= (  ( (((PIND>>PD2)&0x01)<<1) | ((PIND>>PD1)&0x01) )  &  0x03  ); //add current state
     amo6_encoder_val += enc_states[( old_AB & 0x0f )];
@@ -357,15 +357,13 @@ ISR(TIMER1_COMPA_vect){
         if (amo7_local_acceleration && rise){   //adjust acceleration
             uint16_t ocr1a_tmp = (OCR1AH << 8) | (OCR1AL);  //load OCR1A value
             if (accel1 > 0){
-                printf("   accel: %d\n", ocr1a_tmp);
-                ocr1a_tmp -= 1;
+                ocr1a_tmp -= amo7_accel_rate;
                 OCR1AH = (ocr1a_tmp >> 8);
                 OCR1AL = (ocr1a_tmp & 0xff);
-                accel1 -= 1;
+                accel1 -= amo7_accel_rate;
             }
             else if(current_tmp < amo7_steps_to_max_min){
-                printf("   deccel: %d\n", ocr1a_tmp);
-                ocr1a_tmp += 1;
+                ocr1a_tmp += amo7_accel_rate;
                 OCR1AH = (ocr1a_tmp >> 8);
                 OCR1AL = (ocr1a_tmp & 0xff);
             }
@@ -1105,15 +1103,15 @@ void amo6_screen_draw () {
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     int tmp2[2] = {(abs(amo7_motors[amo7_stepper_motor_number].step_holder) >> 3) * (signbit(amo7_motors[amo7_stepper_motor_number].step_holder)?-1:1), abs(amo7_motors[amo7_stepper_motor_number].step_holder) & 0x7};
     sprintf(text_buf, "%d", tmp2[0]);
-    if (abs(tmp2[0]) < 1000){
-        CleO.StringExt(FONT_SANS_5, 248, 38, amo6_screen_text_color, MR, 0, 0, text_buf);
+    if (abs(tmp2[0]) >= 1000){
+        CleO.StringExt(FONT_SANS_4, 248, 43, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
     else {
-        CleO.StringExt(FONT_SANS_4, 248, 46, amo6_screen_text_color, MR, 0, 0, text_buf);
+        CleO.StringExt(FONT_SANS_5, 248, 39, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
     sprintf(text_buf, "%d/8", tmp2[1]);
     CleO.StringExt(FONT_SANS_3, 290, 40+5, amo6_screen_text_color, MR, 0, 0, text_buf);
-    CleO.StringExt(FONT_SANS_2, 305, 40+8, amo6_screen_text_color, MR, 0, 0, "s");
+    CleO.StringExt(FONT_SANS_2, 305, 40+6, amo6_screen_text_color, MR, 0, 0, "s");
     
     //Fine Step Adjustment
     CleO.Tag(fine_step_adjustment);
@@ -1171,7 +1169,6 @@ void amo6_screen_shortPress (bool *press_detected) {
 void amo6_screen_processShortPress () {
     int i;
     bool sel;
-    
     switch (amo6_screen_current_tag) {
         case moving_voltge_output	:
             AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -1266,7 +1263,6 @@ void amo7_dac_init(){
         AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);
         init_input >>= 1;
     }
-    
     AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input 
     _delay_ms(10);
     for (int i = 0; i<= amo7_max_stepper_motor_number; i++){  //set pfd for motors
@@ -1325,7 +1321,7 @@ void background_stepping (){
             amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], 0);//config after
         }
         int current_steps = (abs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
-        printf("        current steps: %d\n", current_steps);
+        printf("        steps to move: %d\n", current_steps);
         if (current_steps == 0 && (amo7_queued_microstep_counter < amo7_max_microstep_number)) {                                        //set new microstep
             amo7_queued_microstep_counter += 1;
             amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], amo7_queued_microstep_counter);
@@ -1507,5 +1503,4 @@ void amo7_waveplate_calib (int motor_num){
     amo7_motors[motor_num].step_holder = 0;
     amo7_motors[motor_num].move_holder = 0;
 }
-
 #endif // AMO3_H
