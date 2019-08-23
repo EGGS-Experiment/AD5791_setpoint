@@ -33,7 +33,7 @@ const char firmware_id[] = "1.1.0";
 #define AMO7_DRV_CLEAR      PA0
 #define AMO7_DRV_CLOCK      PA1
 #define AMO7_DRV_LOAD       PA2
-#define AMO7_DRV_INPUT      PA3    
+#define AMO7_DRV_INPUT      PA3   
 #define AMO7_DAC_LOAD       PA4
 #define AMO7_DAC_CLOCK      PA5
 #define AMO7_DAC_INPUT      PA6
@@ -216,7 +216,7 @@ void amo7_init                   ();
 void amo7_dac_init               ();
 void amo7_stepper_dac_update     (int motor_num, int mode);
 void amo7_background_stepping    ();
-void amo7_board_config           (int motor_num, bool in);
+void amo7_board_config           (int motor_num, bool out);
 void amo7_motor_config           (int motor_num, bool dir, int msn);
 void amo7_move_config            (int motor_num);
 void amo7_manual_stepping        (int motor_num, int ms, int steps);
@@ -242,8 +242,8 @@ void amo7_init ()
     
     AMO7_DRV_DAC_DDR    = 0xff; //AMO7_DRV_DAC_PORT is shift register & DAC
     AMO7_STEP_DDR       = 0xf0; //J0-J3 is motor 1 feedback, J4-J7 are motor step output
-    AMO7_BOARD_DDR      = 0x0f; //C0-C3 enable input dig. iso., C4-C7 enable feedback dig. iso.
-    AMO7_FEEDBACK_DDR2  = 0xff; //PORTK is all feedback
+    AMO7_BOARD_DDR      = 0xff; //C0-C3 enable input dig. iso., C4-C7 enable feedback dig. iso.
+    AMO7_FEEDBACK_DDR2  = 0x00; //PORTK is all feedback
     
     // hardware init
     TCCR1B |= _BV(WGM12);  //set CTC mode
@@ -1310,8 +1310,8 @@ void amo7_background_stepping (){
             }
             amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], 0);//config after
         }
-        int current_steps = (labs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
-        printf("        steps to move: %d\n", current_steps);
+        long current_steps = (labs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
+        printf("        steps to move: %ld\n", current_steps);
         if (current_steps == 0 && (amo7_queued_microstep_counter < amo7_max_microstep_number)) {                                        //set new microstep
             amo7_queued_microstep_counter += 1;
             amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], amo7_queued_microstep_counter);
@@ -1355,9 +1355,9 @@ void amo7_background_stepping (){
     }
 }
 
-void amo7_board_config(int motor_num, bool in) {
+void amo7_board_config(int motor_num, bool out) {
     uint8_t board_num = 0;
-    int io_shift = in? 0:4;                     //K0-K3 = in boards, K4-K7 = out boards
+    int io_shift = out? 0:4;    //C0-C3 = out boards, C4-C7 = in boards
     uint8_t board_select = AMO7_BOARD_PORT | 0x0f;
     switch ((motor_num-(motor_num % 3))/3) {
         case 0:
@@ -1373,13 +1373,13 @@ void amo7_board_config(int motor_num, bool in) {
             board_num = AMO7_BOARD_PIN_3 + io_shift;
             break;
     }
-    if (in){
-        board_select |= _BV(board_num);
-    }
-    else {
+    if (out){
         board_select &= ~(_BV(board_num));
     }
-    AMO7_BOARD_PORT = board_select;           
+    else {
+        board_select |= _BV(board_num);
+    }
+    AMO7_BOARD_PORT = board_select;         
 }
 
 void amo7_motor_config(int motor_num, bool dir, int msn) {
