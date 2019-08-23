@@ -1,5 +1,5 @@
-#ifndef AMO3_H
-#define AMO3_H 1
+#ifndef AMO7_H
+#define AMO7_H 1
 
 #include <stdlib.h>
 #include <math.h>
@@ -29,11 +29,6 @@ const char firmware_id[] = "1.1.0";
 #define AMO6_BUZZER_nEN		PD7
 #define AMO6_BUZZER_nEN_DDR   	DDRD
 #define AMO6_BUZZER_nEN_PORT  	PORTD
-
-#define AMO3_PWR_nOK		PH2
-#define AMO3_PWR_nOK_PIN   	PINH
-#define AMO3_PWR_nOK_DDR   	DDRH
-#define AMO3_PWR_nOK_PORT  	PORTH
 
 #define AMO7_DRV_CLEAR      PA0
 #define AMO7_DRV_CLOCK      PA1
@@ -169,8 +164,8 @@ struct Individual_Motor {
     }
     float           step_size       ;
     bool            sensor          ;
-    int16_t         step_holder     = 0;
-    int16_t         move_holder     = 0;
+    long            step_holder     = 0;
+    long            move_holder     = 0;
     int             moving_voltage  = 0;
     int             holding_voltage = 0;
     int             pfd_voltage     = 0;
@@ -230,15 +225,12 @@ void amo7_waveplate_calib        (int motor_num);
 // Implementation
 //////////////////////////////////////////////////////////////////////////////////////
 
-// AMO3 (edited for AMO7)
+// AMO7
 void amo7_init ()
 {
     // hardware i/o config
     AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR);//output
     AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
-    
-    AMO3_PWR_nOK_DDR  &= ~_BV(AMO3_PWR_nOK); //input
-    AMO3_PWR_nOK_PORT &= ~_BV(AMO3_PWR_nOK); //disable pullup
     
     AMO6_EXT1_nEN_DDR  |=  _BV(AMO6_EXT1_nEN); //output
     AMO6_EXT1_nEN_PORT &= ~_BV(AMO6_EXT1_nEN); //0
@@ -370,7 +362,7 @@ ISR(TIMER1_COMPA_vect){
 void amo6_buttons_update () {
     static int tag_old = 0;
     int tag;
-    float tmp;
+    double tmp;
     bool sw1_now = (PINB>>PB6) & 0x01;
     bool sw2_now = (PINB>>PB5) & 0x01;
     
@@ -708,14 +700,12 @@ void amo6_buttons_update () {
                 tmp = amo7_motors[amo7_stepper_motor_number].step_holder + val * (_BV(3 - amo7_microstep_number));
                 if (tmp>amo7_max_holder_val) {
                     tmp=amo7_max_holder_val;
-                    val = 0;
                 }
                 if (tmp<(amo7_max_holder_val*-1)) {
                     tmp=(amo7_max_holder_val*-1);
-                    val = 0;
                 }
                 amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
-                if (amo7_alt_mode) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, val);
+                if (amo7_alt_mode && abs(tmp) < amo7_max_holder_val) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, val);
                 break;
             case stepper_motor_counter    	:
                 val = val/10;
@@ -884,8 +874,10 @@ void amo6_serial_parse ()
                 char *move_tmp[2];                    //split input into steps
                 move_tmp[0] = strtok(token[2], ", ");
                 move_tmp[1] = strtok(NULL, ", ");
-                int tmp2[2] = {atoi(move_tmp[0]), atoi(move_tmp[1])};
-                int step_holder_tmp = (abs(tmp2[0]) << 3) * (signbit(tmp2[0])?-1:1) + abs(tmp2[1]) * (signbit(tmp2[1])?-1:1);
+                printf("         %s, %s\n", move_tmp[0], move_tmp[1]);
+                long tmp2[2] = {atol(move_tmp[0]), atol(move_tmp[1])};
+                long step_holder_tmp = (abs(tmp2[0]) << 3) * (signbit(tmp2[0])?-1:1) + abs(tmp2[1]) * (signbit(tmp2[1])?-1:1);
+                printf("         %d\n", step_holder_tmp);
                 if (abs(step_holder_tmp) >= amo7_max_holder_val){
                     step_holder_tmp = (amo7_max_holder_val) * (signbit(step_holder_tmp)?-1:1);
                     tmp2[0] = (abs(step_holder_tmp) >> 3) * (signbit(step_holder_tmp)?-1:1);
@@ -893,7 +885,7 @@ void amo6_serial_parse ()
                 }
                 amo7_motors[channel-1].step_holder = step_holder_tmp;
                 amo7_move_config(channel-1);
-                printf("move.w: motor #%d set to: %d (full), %d (eighths)\n", channel, tmp2[0], tmp2[1]);
+                printf("move.w: motor #%d set to: %d (full), %d (eighths)\n", channel, (int) tmp2[0], (int) tmp2[1]);
             }
             else {
                 printf("move.w invalid: motor currently queued up to move\n");
@@ -923,7 +915,7 @@ void amo6_serial_parse ()
                     amo7_motors[channel-1].move_holder = 0;
                     amo7_motors[channel-1].step_holder = 0;
                 }
-                else {
+                else if (amo7_motors[channel-1].sensor) {
                     amo7_waveplate_calib(channel-1);
                 }
                 printf("calib.w : calibrated motor #%d\n", channel);
@@ -1091,12 +1083,12 @@ void amo6_screen_draw () {
     CleO.Tag(calibrate_button);
     CleO.RectangleColor(amo7_motors[amo7_stepper_motor_number].enable ? MY_GREEN : MY_RED);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-    if (!amo7_alt_mode){
-    CleO.StringExt(FONT_SANS_3, 400, 120, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
-    }
-    else {
+    if (amo7_alt_mode){
         CleO.StringExt(FONT_SANS_2, 400, 110, amo6_screen_text_color, MM, 0, 0, "CALIBRATE:");
         CleO.StringExt(FONT_SANS_2, 400, 130, amo6_screen_text_color, MM, 0, 0, "WAVEPLATE");
+    }
+    else {
+        CleO.StringExt(FONT_SANS_3, 400, 120, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
     }
     
     //Fine Steps
@@ -1212,7 +1204,7 @@ void amo6_screen_processShortPress () {
                     amo7_motors[amo7_stepper_motor_number].move_holder = 0;
                     amo7_motors[amo7_stepper_motor_number].step_holder = 0;
                 }
-                else{
+                else if (amo7_motors[amo7_stepper_motor_number].sensor){
                     amo7_waveplate_calib(amo7_stepper_motor_number);
                 }
             }
@@ -1367,7 +1359,7 @@ void background_stepping (){
 void amo7_board_config(int motor_num, bool in) {
     uint8_t board_num = 0;
     int io_shift = in? 0:4;                     //K0-K3 = in boards, K4-K7 = out boards
-    uint8_t board_select = AMO7_BOARD_PORT;
+    uint8_t board_select = AMO7_BOARD_PORT | 0x0f;
     switch ((motor_num-(motor_num % 3))/3) {
         case 0:
             board_num = AMO7_BOARD_PIN_0 + io_shift;
@@ -1382,8 +1374,12 @@ void amo7_board_config(int motor_num, bool in) {
             board_num = AMO7_BOARD_PIN_3 + io_shift;
             break;
     }
-    board_select |= in? 0x0f:0xf0;
-    board_select &= ~(_BV(board_num));
+    if (in){
+        board_select |= _BV(board_num);
+    }
+    else {
+        board_select &= ~(_BV(board_num));
+    }
     AMO7_BOARD_PORT = board_select;           
 }
 
@@ -1502,4 +1498,4 @@ void amo7_waveplate_calib (int motor_num){
     amo7_motors[motor_num].step_holder = 0;
     amo7_motors[motor_num].move_holder = 0;
 }
-#endif // AMO3_H
+#endif // AMO7_H
