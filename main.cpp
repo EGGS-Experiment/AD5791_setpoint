@@ -77,7 +77,7 @@ int main(void) {
     bool no_op=1;
     for (;;) {
         if (counter%(5)==0) {
-            background_stepping();
+            amo7_background_stepping();
             no_op = 0;
         }
         if (counter%100==0) {

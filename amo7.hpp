@@ -215,6 +215,7 @@ bool          amo7_rounding_mode              = false;  //move to nearest full s
 void amo7_init                   ();
 void amo7_dac_init               ();
 void amo7_stepper_dac_update     (int motor_num, int mode);
+void amo7_background_stepping    ();
 void amo7_board_config           (int motor_num, bool in);
 void amo7_motor_config           (int motor_num, bool dir, int msn);
 void amo7_move_config            (int motor_num);
@@ -355,7 +356,7 @@ ISR(TIMER1_COMPA_vect){
     else {
         AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         amo7_local_acceleration = false;
-        amo7_motor_moving = false;      //tell background_stepping to stop
+        amo7_motor_moving = false;      //tell amo7_background_stepping to stop
     }
 }
 
@@ -874,18 +875,16 @@ void amo6_serial_parse ()
                 char *move_tmp[2];                    //split input into steps
                 move_tmp[0] = strtok(token[2], ", ");
                 move_tmp[1] = strtok(NULL, ", ");
-                printf("         %s, %s\n", move_tmp[0], move_tmp[1]);
                 long tmp2[2] = {atol(move_tmp[0]), atol(move_tmp[1])};
-                long step_holder_tmp = (abs(tmp2[0]) << 3) * (signbit(tmp2[0])?-1:1) + abs(tmp2[1]) * (signbit(tmp2[1])?-1:1);
-                printf("         %d\n", step_holder_tmp);
-                if (abs(step_holder_tmp) >= amo7_max_holder_val){
+                long step_holder_tmp = (labs(tmp2[0]) << 3) * (signbit(tmp2[0])?-1:1) + labs(tmp2[1]) * (signbit(tmp2[1])?-1:1);
+                if (labs(step_holder_tmp) >= amo7_max_holder_val){
                     step_holder_tmp = (amo7_max_holder_val) * (signbit(step_holder_tmp)?-1:1);
                     tmp2[0] = (abs(step_holder_tmp) >> 3) * (signbit(step_holder_tmp)?-1:1);
                     tmp2[1] = 0;
                 }
                 amo7_motors[channel-1].step_holder = step_holder_tmp;
                 amo7_move_config(channel-1);
-                printf("move.w: motor #%d set to: %d (full), %d (eighths)\n", channel, (int) tmp2[0], (int) tmp2[1]);
+                printf("move.w: motor #%d set to: %ld (full), %ld (eighths)\n", channel, tmp2[0], tmp2[1]);
             }
             else {
                 printf("move.w invalid: motor currently queued up to move\n");
@@ -1298,7 +1297,7 @@ void amo7_stepper_dac_update (int motor_num, int mode) {
     AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);        //CS/LD high to finish serial input
 }
 
-void background_stepping (){
+void amo7_background_stepping (){
     if (amo7_queue_index != 0 && !amo7_motor_moving){
         if (amo7_new_motor){                 
             printf("   new motor\n");
@@ -1311,7 +1310,7 @@ void background_stepping (){
             }
             amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], 0);//config after
         }
-        int current_steps = (abs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
+        int current_steps = (labs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
         printf("        steps to move: %d\n", current_steps);
         if (current_steps == 0 && (amo7_queued_microstep_counter < amo7_max_microstep_number)) {                                        //set new microstep
             amo7_queued_microstep_counter += 1;
