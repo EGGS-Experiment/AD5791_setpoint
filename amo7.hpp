@@ -1337,7 +1337,7 @@ void amo7_background_stepping (){
             uint16_t ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
             //config accel
             if (amo7_global_acceleration && amo7_queued_microstep_counter == 0){
-                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us/amo7_accel_rate);
+                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us);
                 if (current_steps > (2 * amo7_steps_to_max_min)){
                     accel1 = amo7_steps_to_max_min;
                     amo7_local_acceleration = true;
@@ -1357,29 +1357,28 @@ void amo7_background_stepping (){
 
 void amo7_board_config(int motor_num, bool out) {
     uint8_t board_num = 0;
-    int io_shift = out? 0:4;    //C0-C3 = out boards, C4-C7 = in boards
-    uint8_t board_select = AMO7_BOARD_PORT | 0x0f;
     switch ((motor_num-(motor_num % 3))/3) {
         case 0:
-            board_num = AMO7_BOARD_PIN_0 + io_shift;
+            board_num = AMO7_BOARD_PIN_0;
             break;
         case 1:
-            board_num = AMO7_BOARD_PIN_1 + io_shift;
+            board_num = AMO7_BOARD_PIN_1;
             break;
         case 2:
-            board_num = AMO7_BOARD_PIN_2 + io_shift;
+            board_num = AMO7_BOARD_PIN_2;
             break;
         case 3:
-            board_num = AMO7_BOARD_PIN_3 + io_shift;
+            board_num = AMO7_BOARD_PIN_3;
             break;
     }
     if (out){
-        board_select &= ~(_BV(board_num));
+        AMO7_BOARD_PORT |= 0x0f;
+        AMO7_BOARD_PORT &= ~(_BV(board_num));
     }
     else {
-        board_select |= _BV(board_num);
-    }
-    AMO7_BOARD_PORT = board_select;         
+        AMO7_BOARD_PORT &= 0x0f;
+        AMO7_BOARD_PORT |= _BV(board_num + 4);  //C0-C3 = out boards, C4-C7 = in boards 
+    }        
 }
 
 void amo7_motor_config(int motor_num, bool dir, int msn) {
