@@ -13,7 +13,7 @@
 const char device_name[] = "Stepper Motor Controller";
 const char device_id[]   = "AMO7";
 const char hardware_id[] = "1.0.0";
-const char firmware_id[] = "1.1.0";
+const char firmware_id[] = "1.0.0";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -149,7 +149,7 @@ void  amo6_screen_processShortPress  ();
         //Global constants
 #define      amo7_max_stepper_motor_number  11
 #define      amo7_max_microstep_number      3
-#define      amo7_max_holder_val            32000   //4000 << 3, too high = overflow
+#define      amo7_max_holder_val            102400   //200*64 << 3, too high = overflow
 #define      amo7_max_V                     255
 #define      amo7_min_delay_us              100     //-> max speed = 10k steps/s
 #define      amo7_max_delay_us              65000   //det. by timer register size (16b)
@@ -1337,7 +1337,7 @@ void amo7_background_stepping (){
             uint16_t ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
             //config accel
             if (amo7_global_acceleration && amo7_queued_microstep_counter == 0){
-                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us);
+                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us/amo7_accel_rate);
                 if (current_steps > (2 * amo7_steps_to_max_min)){
                     accel1 = amo7_steps_to_max_min;
                     amo7_local_acceleration = true;
