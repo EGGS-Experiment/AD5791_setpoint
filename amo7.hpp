@@ -149,7 +149,7 @@ void  amo6_screen_processShortPress  ();
         //Global constants
 #define      amo7_max_stepper_motor_number  11
 #define      amo7_max_microstep_number      3
-#define      amo7_max_holder_val            102400   //200*64 << 3, too high = overflow
+#define      amo7_max_holder_val            32000   //4000 << 3, too high = overflow
 #define      amo7_max_V                     255
 #define      amo7_min_delay_us              100     //-> max speed = 10k steps/s
 #define      amo7_max_delay_us              65000   //det. by timer register size (16b)
@@ -342,7 +342,7 @@ ISR(TIMER1_COMPA_vect){
                 ocr1a_tmp -= amo7_accel_rate;
                 OCR1AH = (ocr1a_tmp >> 8);
                 OCR1AL = (ocr1a_tmp & 0xff);
-                accel1 -= amo7_accel_rate;
+                accel1 -= 1;
             }
             else if(current_tmp < amo7_steps_to_max_min){
                 ocr1a_tmp += amo7_accel_rate;
@@ -1337,7 +1337,7 @@ void amo7_background_stepping (){
             uint16_t ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
             //config accel
             if (amo7_global_acceleration && amo7_queued_microstep_counter == 0){
-                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us);
+                amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us/amo7_accel_rate);
                 if (current_steps > (2 * amo7_steps_to_max_min)){
                     accel1 = amo7_steps_to_max_min;
                     amo7_local_acceleration = true;
@@ -1357,6 +1357,7 @@ void amo7_background_stepping (){
 
 void amo7_board_config(int motor_num, bool out) {
     uint8_t board_num = 0;
+    uint8_t board_tmp = AMO7_BOARD_PORT;
     switch ((motor_num-(motor_num % 3))/3) {
         case 0:
             board_num = AMO7_BOARD_PIN_0;
@@ -1372,13 +1373,14 @@ void amo7_board_config(int motor_num, bool out) {
             break;
     }
     if (out){
-        AMO7_BOARD_PORT |= 0x0f;
-        AMO7_BOARD_PORT &= ~(_BV(board_num));
+        board_tmp |= 0x0f;
+        board_tmp &= ~(_BV(board_num));
     }
     else {
-        AMO7_BOARD_PORT &= 0x0f;
-        AMO7_BOARD_PORT |= _BV(board_num + 4);  //C0-C3 = out boards, C4-C7 = in boards 
+        board_tmp &= 0x0f;
+        board_tmp |= _BV(board_num + 4);  //C0-C3 = out boards, C4-C7 = in boards 
     }        
+    AMO7_BOARD_PORT = board_tmp;
 }
 
 void amo7_motor_config(int motor_num, bool dir, int msn) {
