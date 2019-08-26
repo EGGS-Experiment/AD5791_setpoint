@@ -56,6 +56,7 @@ const char firmware_id[] = "1.0.0";
 
 #define AMO7_FEEDBACK_PORT1 PORTJ
 #define AMO7_FEEDBACK_PORT2 PORTK
+#define AMO7_FEEDBACK_PORT3 PORTK
 #define AMO7_FEEDBACK_DDR2  DDRK
 
 //  Buttons (AMO6)
@@ -103,14 +104,6 @@ void  amo6_serial_parse   ();
 uint32_t amo6_screen_text_color = MY_BLACK;
 uint32_t amo6_screen_line_color = MY_DARKBLUE;
 
-#define AMO6_SCREEN_ROW1_Y	45
-#define AMO6_SCREEN_ROW1_H	90
-#define AMO6_SCREEN_ROW2_Y	125
-#define AMO6_SCREEN_ROW2_H	70
-#define AMO6_SCREEN_ROW3_Y	205
-#define AMO6_SCREEN_ROW3_H	90
-#define AMO6_SCREEN_ROW4_Y	285
-#define AMO6_SCREEN_ROW4_H	70
 #define AMO6_SCREEN_OFFSET  1
 
 enum {
@@ -1031,7 +1024,7 @@ void amo6_screen_draw () {
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 200-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     double output_volts = amo7_motors[amo7_stepper_motor_number].moving_voltage*4.096/256;
     sprintf(text_buf, "%1.3f", output_volts);
-    CleO.StringExt(FONT_SANS_1, 160+3, 160+2, amo6_screen_text_color, TL, 0, 0, "Moving");
+    CleO.StringExt(FONT_SANS_0, 160+3, 160+2, amo6_screen_text_color, TL, 0, 0, "Moving");
     CleO.StringExt(FONT_SANS_4, 280, 200, amo6_screen_text_color, MR, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_3, 290, 200+2, amo6_screen_text_color, MM, 0, 0, "V");
     
@@ -1041,7 +1034,7 @@ void amo6_screen_draw () {
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 280-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     double holding_volts = amo7_motors[amo7_stepper_motor_number].holding_voltage*4.096/256;
     sprintf(text_buf, "%1.3f", holding_volts);
-    CleO.StringExt(FONT_SANS_1, 160+3, 240+2, amo6_screen_text_color, TL, 0, 0, "Holding");
+    CleO.StringExt(FONT_SANS_0, 160+3, 240+2, amo6_screen_text_color, TL, 0, 0, "Holding");
     CleO.StringExt(FONT_SANS_4, 280, 280, amo6_screen_text_color, MR, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_3, 290, 280+2, amo6_screen_text_color, MM, 0, 0, "V");
     
@@ -1052,7 +1045,7 @@ void amo6_screen_draw () {
     if (amo7_motors[amo7_stepper_motor_number].enable){
         CleO.StringExt(FONT_SANS_5, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVE");
     }
-    else if (!amo7_motors[amo7_stepper_motor_number].enable  && amo7_step_queue[0][0] == amo7_stepper_motor_number) {
+    else if (amo7_step_queue[0][0] == amo7_stepper_motor_number) {
         CleO.StringExt(FONT_SANS_4, 400, 240, amo6_screen_text_color, MM, 0, 0, "MOVING");
     }
     else {
@@ -1068,7 +1061,8 @@ void amo6_screen_draw () {
     CleO.Tag(coarse_display);
     CleO.RectangleColor(amo6_screen_select[coarse_display] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
-    double total_angle = amo7_motors[amo7_stepper_motor_number].step_holder * amo7_motors[amo7_stepper_motor_number].step_size/8;
+    CleO.StringExt(FONT_SANS_0, 320+3, 0+2, amo6_screen_text_color, TL, 0, 0, "Coarse Display");
+    double total_angle = amo7_motors[amo7_stepper_motor_number].step_holder * amo7_motors[amo7_stepper_motor_number].step_size / 8;
     sprintf(text_buf, "%.2f", total_angle);
     if (abs(total_angle) >= 1000 || total_angle <= -100){
         CleO.StringExt(FONT_SANS_4, 459, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
@@ -1094,6 +1088,7 @@ void amo6_screen_draw () {
     CleO.Tag(step_counter);
     CleO.RectangleColor(amo6_screen_select[step_counter] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_0, 160+3, 0+2, amo6_screen_text_color, TL, 0, 0, "Step Display");
     int tmp2[2] = {(abs(amo7_motors[amo7_stepper_motor_number].step_holder) >> 3) * (signbit(amo7_motors[amo7_stepper_motor_number].step_holder)?-1:1), abs(amo7_motors[amo7_stepper_motor_number].step_holder) & 0x7};
     sprintf(text_buf, "%d", tmp2[0]);
     if (abs(tmp2[0]) >= 1000){
@@ -1110,6 +1105,7 @@ void amo6_screen_draw () {
     CleO.Tag(fine_step_adjustment);
     CleO.RectangleColor(amo6_screen_select[fine_step_adjustment] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_0, 160+3, 80+2, amo6_screen_text_color, TL, 0, 0, "Microsteps");
     sprintf(text_buf, "1/%d ", (1 << amo7_microstep_number));
     CleO.StringExt(FONT_SANS_6, 240, 120, amo6_screen_text_color, MM, 0, 0, text_buf);
     sprintf(text_buf, "%.3f", (double) amo7_motors[amo7_stepper_motor_number].step_size/(1 << amo7_microstep_number));
@@ -1120,6 +1116,7 @@ void amo6_screen_draw () {
     CleO.Tag(stepper_motor_counter);
     CleO.RectangleColor(amo6_screen_select[stepper_motor_counter] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(80-2*AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET);
+    CleO.StringExt(FONT_SANS_0, 0+3, 0+2, amo6_screen_text_color, TL, 0, 0, "Motor Number");
     sprintf(text_buf, "#%d", amo7_stepper_motor_number+1);
     CleO.StringExt(FONT_SANS_6, 80, 80, amo6_screen_text_color, MM, 0, 0, text_buf);
 
@@ -1476,24 +1473,23 @@ void amo7_waveplate_calib (int motor_num){
     switch (motor_num % 3){
         case 0:
             port = &AMO7_FEEDBACK_PORT1;
-            sensor_pin = 1;
+            sensor_pin = 0;
             break;
         case 1:
             port = &AMO7_FEEDBACK_PORT2;
-            sensor_pin = 6;
+            sensor_pin = 7;
             break;
         case 2:
-            port = &AMO7_FEEDBACK_PORT2;
-            sensor_pin = 2;
+            port = &AMO7_FEEDBACK_PORT3;
+            sensor_pin = 3;
             break;
     }
     amo7_board_config(motor_num, true);     //set up motor control
     amo7_board_config(motor_num, false);    //set up motor feedback
-    bool calibrated = (*port & _BV(sensor_pin));
-    while (!calibrated){                    //step until sensor is high
+    bool light = (*port & _BV(sensor_pin));
+    while (light){                    //step until sensor is low (blocked)
         amo7_manual_stepping(motor_num, 0, 1);
-        _delay_ms(5);
-        calibrated = *port & _BV(sensor_pin);
+        light = *port & _BV(sensor_pin);
     }
     amo7_motors[motor_num].step_holder = 0;
     amo7_motors[motor_num].move_holder = 0;
