@@ -122,7 +122,7 @@ enum {
 #define AMO6_SCREEN_TAGS 11	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
-int16_t  amo6_screen_x  , amo6_screen_y  ;
+int16_t  amo6_screen_x  , amo6_screen_y    ;
 int16_t  amo6_screen_current_dur           ;
 int      amo6_screen_last_dur              = 0;
 int16_t  amo6_screen_current_tag           ;
@@ -142,7 +142,7 @@ void  amo6_screen_processShortPress  ();
         //Global constants
 #define      amo7_max_stepper_motor_number  11
 #define      amo7_max_microstep_number      3
-#define      amo7_max_holder_val            32000   //4000 << 3, too high = overflow
+#define      amo7_max_holder_val            102400   //200*64 << 3, too high = overflow
 #define      amo7_max_V                     255
 #define      amo7_min_delay_us              100     //-> max speed = 10k steps/s
 #define      amo7_max_delay_us              65000   //det. by timer register size (16b)
@@ -169,7 +169,7 @@ struct Individual_Motor {
 
 Individual_Motor amo7_motors[12] {
     Individual_Motor(1.8, false),  //1
-    Individual_Motor(1.8, false),  //2
+    Individual_Motor(1.8, true),  //2
     Individual_Motor(1.8, false),  //3
     Individual_Motor(1.8, false),  //4
     Individual_Motor(1.8, false),  //5
@@ -319,7 +319,7 @@ ISR(PCINT0_vect){   //SW1 SW2
 
 ISR(TIMER1_COMPA_vect){
     TCCR1B &= ~(_BV(CS11)); //turn off timer
-    uint16_t current_tmp = abs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter);
+    uint16_t current_tmp = labs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter);
     if (current_tmp != 0) {
         if (rise){                      //step high
             AMO7_STEP_PORT |= _BV(amo7_motor_shift); 
@@ -699,7 +699,7 @@ void amo6_buttons_update () {
                     tmp=(amo7_max_holder_val*-1);
                 }
                 amo7_motors[amo7_stepper_motor_number].step_holder = tmp;
-                if (amo7_alt_mode && abs(tmp) < amo7_max_holder_val) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, val);
+                if (amo7_alt_mode && labs(tmp) < amo7_max_holder_val) amo7_manual_stepping(amo7_stepper_motor_number, amo7_microstep_number, val);
                 break;
             case stepper_motor_counter    	:
                 val = val/10;
@@ -872,7 +872,7 @@ void amo6_serial_parse ()
                 long step_holder_tmp = (labs(tmp2[0]) << 3) * (signbit(tmp2[0])?-1:1) + labs(tmp2[1]) * (signbit(tmp2[1])?-1:1);
                 if (labs(step_holder_tmp) >= amo7_max_holder_val){
                     step_holder_tmp = (amo7_max_holder_val) * (signbit(step_holder_tmp)?-1:1);
-                    tmp2[0] = (abs(step_holder_tmp) >> 3) * (signbit(step_holder_tmp)?-1:1);
+                    tmp2[0] = (labs(step_holder_tmp) >> 3) * (signbit(step_holder_tmp)?-1:1);
                     tmp2[1] = 0;
                 }
                 amo7_motors[channel-1].step_holder = step_holder_tmp;
@@ -888,8 +888,8 @@ void amo6_serial_parse ()
         int channel = atoi(token[1]);
         if (channel <= 12 && channel >=1){
             int tmp2[2];
-            tmp2[0] = (abs(amo7_motors[channel-1].step_holder) >> 3) * (signbit(amo7_motors[channel-1].step_holder)?-1:1);
-            tmp2[1] = abs(amo7_motors[amo7_stepper_motor_number].step_holder) & 0x7;
+            tmp2[0] = (labs(amo7_motors[channel-1].step_holder) >> 3) * (signbit(amo7_motors[channel-1].step_holder)?-1:1);
+            tmp2[1] = labs(amo7_motors[amo7_stepper_motor_number].step_holder) & 0x7;
             printf("full steps: %d, eighth steps: %d\n", tmp2[0], tmp2[1]);
         }
     }
@@ -1064,7 +1064,7 @@ void amo6_screen_draw () {
     CleO.StringExt(FONT_SANS_0, 320+3, 0+2, amo6_screen_text_color, TL, 0, 0, "Coarse Display");
     double total_angle = amo7_motors[amo7_stepper_motor_number].step_holder * amo7_motors[amo7_stepper_motor_number].step_size / 8;
     sprintf(text_buf, "%.2f", total_angle);
-    if (abs(total_angle) >= 1000 || total_angle <= -100){
+    if (labs(total_angle) >= 1000 || total_angle <= -100){
         CleO.StringExt(FONT_SANS_4, 459, 40, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
     else {
@@ -1077,7 +1077,7 @@ void amo6_screen_draw () {
     CleO.RectangleColor(amo7_motors[amo7_stepper_motor_number].enable ? MY_GREEN : MY_RED);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     if (amo7_alt_mode){
-        CleO.StringExt(FONT_SANS_2, 400, 110, amo6_screen_text_color, MM, 0, 0, "CALIBRATE:");
+        CleO.StringExt(FONT_SANS_2, 400, 110, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
         CleO.StringExt(FONT_SANS_2, 400, 130, amo6_screen_text_color, MM, 0, 0, "WAVEPLATE");
     }
     else {
@@ -1089,15 +1089,18 @@ void amo6_screen_draw () {
     CleO.RectangleColor(amo6_screen_select[step_counter] ? CLEO_SELECT : MY_WHITE);
     CleO.RectangleXY(240-2*AMO6_SCREEN_OFFSET, 40-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     CleO.StringExt(FONT_SANS_0, 160+3, 0+2, amo6_screen_text_color, TL, 0, 0, "Step Display");
-    int tmp2[2] = {(abs(amo7_motors[amo7_stepper_motor_number].step_holder) >> 3) * (signbit(amo7_motors[amo7_stepper_motor_number].step_holder)?-1:1), abs(amo7_motors[amo7_stepper_motor_number].step_holder) & 0x7};
-    sprintf(text_buf, "%d", tmp2[0]);
-    if (abs(tmp2[0]) >= 1000){
+    long tmp2[2] = {(labs(amo7_motors[amo7_stepper_motor_number].step_holder) >> 3) * (signbit(amo7_motors[amo7_stepper_motor_number].step_holder)?-1:1), labs(amo7_motors[amo7_stepper_motor_number].step_holder) & 0x7};
+    sprintf(text_buf, "%ld", tmp2[0]);
+    if (labs(tmp2[0]) >= 1000 && labs(tmp2[0]) < 10000){
         CleO.StringExt(FONT_SANS_4, 248, 43, amo6_screen_text_color, MR, 0, 0, text_buf);
+    }
+    else if (labs(tmp2[0]) >= 10000){
+        CleO.StringExt(FONT_SANS_3, 248, 45, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
     else {
         CleO.StringExt(FONT_SANS_5, 248, 39, amo6_screen_text_color, MR, 0, 0, text_buf);
     }
-    sprintf(text_buf, "%d/8", tmp2[1]);
+    sprintf(text_buf, "%ld/8", tmp2[1]);
     CleO.StringExt(FONT_SANS_3, 290, 40+5, amo6_screen_text_color, MR, 0, 0, text_buf);
     CleO.StringExt(FONT_SANS_2, 305, 40+6, amo6_screen_text_color, MR, 0, 0, "s");
     
@@ -1432,7 +1435,7 @@ void amo7_move_config (int motor_num){
         amo7_step_queue[amo7_queue_index][0] = motor_num;
         amo7_step_queue[amo7_queue_index][1] = rounding_steps;
         amo7_step_queue[amo7_queue_index][2] = amo7_motors[motor_num].move_holder>0 ? true:false;
-        amo7_motors[motor_num].move_holder = abs(amo7_motors[motor_num].move_holder);
+        amo7_motors[motor_num].move_holder = labs(amo7_motors[motor_num].move_holder);
         amo7_queue_index += 1;
     }
 }
@@ -1488,6 +1491,7 @@ void amo7_waveplate_calib (int motor_num){
     amo7_board_config(motor_num, false);    //set up motor feedback
     bool light = (*port & _BV(sensor_pin));
     while (light){                    //step until sensor is low (blocked)
+        printf(" light: %d\n", light);
         amo7_manual_stepping(motor_num, 0, 1);
         light = *port & _BV(sensor_pin);
     }
