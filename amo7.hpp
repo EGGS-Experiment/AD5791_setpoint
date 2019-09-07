@@ -56,7 +56,6 @@ const char firmware_id[] = "1.0.0";
 
 #define AMO7_FEEDBACK_PORT1 PORTJ
 #define AMO7_FEEDBACK_PORT2 PORTK
-#define AMO7_FEEDBACK_PORT3 PORTK
 #define AMO7_FEEDBACK_DDR2  DDRK
 
 //  Buttons (AMO6)
@@ -142,7 +141,7 @@ void  amo6_screen_processShortPress  ();
         //Global constants
 #define      amo7_max_stepper_motor_number  11
 #define      amo7_max_microstep_number      3
-#define      amo7_max_holder_val            102400   //200*64 << 3, too high = overflow
+#define      amo7_max_holder_val            358400   //200*64*3.5 << 3, too high = overflow
 #define      amo7_max_V                     255
 #define      amo7_min_delay_us              100     //-> max speed = 10k steps/s
 #define      amo7_max_delay_us              65000   //det. by timer register size (16b)
@@ -1483,15 +1482,18 @@ void amo7_waveplate_calib (int motor_num){
             sensor_pin = 7;
             break;
         case 2:
-            port = &AMO7_FEEDBACK_PORT3;
+            port = &AMO7_FEEDBACK_PORT2;
             sensor_pin = 3;
             break;
     }
     amo7_board_config(motor_num, true);     //set up motor control
     amo7_board_config(motor_num, false);    //set up motor feedback
+    printf(" port: %d\n", *port);
+    printf(" PORTC: %d\n", PORTC);    
+    printf(" PORTK: %d\n", PORTK);
+    printf(" DDRK: %d\n", DDRK);
     bool light = (*port & _BV(sensor_pin));
     while (light){                    //step until sensor is low (blocked)
-        printf(" light: %d\n", light);
         amo7_manual_stepping(motor_num, 0, 1);
         light = *port & _BV(sensor_pin);
     }
