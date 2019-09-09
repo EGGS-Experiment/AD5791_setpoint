@@ -54,8 +54,8 @@ const char firmware_id[] = "1.0.0";
 #define AMO7_BOARD_PORT     PORTC
 #define AMO7_BOARD_DDR      DDRC
 
-#define AMO7_FEEDBACK_PORT1 PORTJ
-#define AMO7_FEEDBACK_PORT2 PORTK
+#define AMO7_FEEDBACK_PIN1  PINJ
+#define AMO7_FEEDBACK_PIN2  PINK
 #define AMO7_FEEDBACK_DDR2  DDRK
 
 //  Buttons (AMO6)
@@ -167,7 +167,7 @@ struct Individual_Motor {
 };
 
 Individual_Motor amo7_motors[12] {
-    Individual_Motor(1.8, false),  //1
+    Individual_Motor(1.8, true),  //1
     Individual_Motor(1.8, true),  //2
     Individual_Motor(1.8, false),  //3
     Individual_Motor(1.8, false),  //4
@@ -318,7 +318,7 @@ ISR(PCINT0_vect){   //SW1 SW2
 
 ISR(TIMER1_COMPA_vect){
     TCCR1B &= ~(_BV(CS11)); //turn off timer
-    uint32_t current_tmp = labs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter);
+    long current_tmp = labs(amo7_motors[amo7_step_queue[0][0]].move_holder) >> (3 - amo7_queued_microstep_counter);
     if (current_tmp != 0) {
         if (rise){                      //step high
             AMO7_STEP_PORT |= _BV(amo7_motor_shift); 
@@ -358,7 +358,6 @@ void amo6_buttons_update () {
     double tmp;
     bool sw1_now = (PINB>>PB6) & 0x01;
     bool sw2_now = (PINB>>PB5) & 0x01;
-    
     for (tag=0;tag<AMO6_SCREEN_TAGS-1;tag++) { //find active screen tag
         if (amo6_screen_select[tag]==1) break;
     };
@@ -1470,34 +1469,31 @@ void amo7_manual_stepping (int motor_num, int ms, int steps) {
 }
 
 void amo7_waveplate_calib (int motor_num){
-    volatile uint8_t *port = 0;
+    volatile uint8_t *pin = 0;
     int sensor_pin = 0;
     switch (motor_num % 3){
         case 0:
-            port = &AMO7_FEEDBACK_PORT1;
+            pin = &AMO7_FEEDBACK_PIN1;
             sensor_pin = 0;
             break;
         case 1:
-            port = &AMO7_FEEDBACK_PORT2;
+            pin = &AMO7_FEEDBACK_PIN2;
             sensor_pin = 7;
             break;
         case 2:
-            port = &AMO7_FEEDBACK_PORT2;
+            pin = &AMO7_FEEDBACK_PIN2;
             sensor_pin = 3;
             break;
     }
     amo7_board_config(motor_num, true);     //set up motor control
     amo7_board_config(motor_num, false);    //set up motor feedback
-    printf(" port: %d\n", *port);
-    printf(" PORTC: %d\n", PORTC);    
-    printf(" PORTK: %d\n", PORTK);
-    printf(" DDRK: %d\n", DDRK);
-    bool light = (*port & _BV(sensor_pin));
+    bool light = (*pin & _BV(sensor_pin));
     while (light){                    //step until sensor is low (blocked)
         amo7_manual_stepping(motor_num, 0, 1);
-        light = *port & _BV(sensor_pin);
+        light = *pin & _BV(sensor_pin);
     }
     amo7_motors[motor_num].step_holder = 0;
     amo7_motors[motor_num].move_holder = 0;
+    printf("   calibrated.");
 }
 #endif // AMO7_H
