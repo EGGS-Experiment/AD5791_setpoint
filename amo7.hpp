@@ -148,6 +148,7 @@ void  amo6_screen_processShortPress  ();
 #define      amo7_starting_delay_us         2000
 #define      amo7_timer_val_to_us           1       //Convert timer value to us, = 1e6 (1s in us) * 8 (prescaler) * 2 (1:1 high:low) / 1.6e7 (clock)
 #define      amo7_accel_rate                5       //shorten delay by 2*5us/s (bc up&down)
+#define      amo7_backlash_constant         10      //backlash from backlash device
 
 struct Individual_Motor {
     Individual_Motor (float angle, bool feedback) {
@@ -200,9 +201,10 @@ volatile long accel1                          ;
 
         //Mode options
 volatile bool amo7_alt_mode                   = false;  //alt mode: manual and waveplate calib
-bool          amo7_global_acceleration        = false;  //accelerates from starting speed
+bool          amo7_global_acceleration        = true;   //accelerates from starting speed
 bool          amo7_local_acceleration         = false;  //shifts calculation to main loop
-bool          amo7_rounding_mode              = false;  //move to nearest full step
+bool          amo7_rounding_mode              = true;   //move to nearest full step
+bool          amo7_back_account               = false;
 
 void amo7_init                   ();
 void amo7_dac_init               ();
@@ -210,9 +212,8 @@ void amo7_stepper_dac_update     (int motor_num, int mode);
 void amo7_background_stepping    ();
 void amo7_board_config           (int motor_num, bool out);
 void amo7_motor_config           (int motor_num, bool dir, int msn);
-void amo7_move_config            (int motor_num);
+void amo7_move_config            (int motor_num, bool calib);
 void amo7_manual_stepping        (int motor_num, int ms, int steps);
-void amo7_waveplate_calib        (int motor_num);
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Implementation
@@ -242,6 +243,11 @@ void amo7_init ()
     TIMSK1 |= _BV(OCIE1A); //enable OCR1A match interrupt        
     AMO7_DRV_DAC_PORT = (_BV(AMO7_DRV_CLEAR) | _BV(AMO7_DAC_LOAD) | _BV(AMO7_DAC_CLEAR));
     AMO7_BOARD_PORT   = 0x00;
+    
+    //sensor interrupt init
+    PCICR |= (_BV(PCIE2) | _BV(PCIE1)); //PCINT0 is enabled by switches
+    PCMSK1 |= _BV(PCINT9);
+    PCMSK2 |= (_BV(PCINT19) | _BV(PCINT23));
     
     amo6_screen_init();
     amo6_buttons_init();
@@ -329,17 +335,15 @@ ISR(TIMER1_COMPA_vect){
             AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         }
         if (amo7_local_acceleration && rise){   //adjust acceleration
-            uint16_t ocr1a_tmp = (OCR1AH << 8) | (OCR1AL);  //load OCR1A value
+            uint16_t ocr1a_tmp = OCR1A;  //load OCR1A value
             if (accel1 > 0){
                 ocr1a_tmp -= amo7_accel_rate;
-                OCR1AH = (ocr1a_tmp >> 8);
-                OCR1AL = (ocr1a_tmp & 0xff);
+                OCR1A = ocr1a_tmp;
                 accel1 -= 1;
             }
             else if(current_tmp < amo7_steps_to_max_min){
                 ocr1a_tmp += amo7_accel_rate;
-                OCR1AH = (ocr1a_tmp >> 8);
-                OCR1AL = (ocr1a_tmp & 0xff);
+                OCR1A = ocr1a_tmp;
             }
         }
         rise = !rise;
@@ -352,6 +356,32 @@ ISR(TIMER1_COMPA_vect){
     }
 }
 
+ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT0
+ISR(PCINT2_vect){
+    volatile uint8_t *pin = 0;
+    int sensor_pin = 0;
+    switch (amo7_step_queue[0][0] % 3){
+        case 0:
+            pin = &AMO7_FEEDBACK_PIN1;
+            sensor_pin = 0;
+            break;
+        case 1:
+            pin = &AMO7_FEEDBACK_PIN2;
+            sensor_pin = 7;
+            break;
+        case 2:
+            pin = &AMO7_FEEDBACK_PIN2;
+            sensor_pin = 3;
+            break;
+    }
+    if (!(*pin & _BV(sensor_pin))){
+        amo7_motors[amo7_step_queue[0][0]].step_holder = 0;
+        amo7_motors[amo7_step_queue[0][0]].move_holder = 0;
+        printf("   calibrated motor %d\n", amo7_step_queue[0][0]);
+    }
+    printf("thkim\n");
+}
+
 void amo6_buttons_update () {
     static int tag_old = 0;
     int tag;
@@ -361,7 +391,6 @@ void amo6_buttons_update () {
     for (tag=0;tag<AMO6_SCREEN_TAGS-1;tag++) { //find active screen tag
         if (amo6_screen_select[tag]==1) break;
     };
-    
     // (+) both buttons are pressed
     if (amo6_sw1_pushed && amo6_sw2_pushed){
         switch (tag) {
@@ -775,8 +804,7 @@ void amo6_serial_update () {
     }
 }
 
-void amo6_serial_parse ()
-{
+void amo6_serial_parse () {
     char delimiters[] = " ";
     char *token[8];
     int i=1;
@@ -874,7 +902,7 @@ void amo6_serial_parse ()
                     tmp2[1] = 0;
                 }
                 amo7_motors[channel-1].step_holder = step_holder_tmp;
-                amo7_move_config(channel-1);
+                amo7_move_config(channel-1, false);
                 printf("move.w: motor #%d set to: %ld (full), %ld (eighths)\n", channel, tmp2[0], tmp2[1]);
             }
             else {
@@ -906,7 +934,7 @@ void amo6_serial_parse ()
                     amo7_motors[channel-1].step_holder = 0;
                 }
                 else if (amo7_motors[channel-1].sensor) {
-                    amo7_waveplate_calib(channel-1);
+                    amo7_move_config(channel-1, true);
                 }
                 printf("calib.w : calibrated motor #%d\n", channel);
             }
@@ -948,6 +976,10 @@ void amo6_serial_parse ()
         amo7_alt_mode = !amo7_alt_mode;
         printf("alt mode: set to %d\n", amo7_alt_mode);
     }
+    else if(strcmp(token[0],"back.toggle")==0 && i == 1) {
+        amo7_back_account = !amo7_back_account;
+        printf("alt mode: set to %d\n", amo7_back_account);
+    }
     else if(strcmp(token[0],"id?")==0 && i == 1) {
         printf("%s\n", device_name);
         printf("Device ID : %s\n", device_id);
@@ -955,7 +987,7 @@ void amo6_serial_parse ()
         printf("Firmware ID : %s\n", firmware_id);
     }
     else if(strcmp(token[0],"help")==0) {
-        printf("Commands:\nvout.w [motor number] [mode] [voltage]\nvout.r [motor number] [mode]\nout.w [motor number] [enable]\nout.r [motor number]\nmove.w [motor number] [full steps, eighth steps]\nmove.r [motor number]\ncalib.w [motor number]\nspeed.w [motor number] [speed]\nspeed.r [motor number]\naccel.toggle\nround.toggle\nalt.toggle\nid?\n");
+        printf("Commands:\nvout.w [motor number] [mode] [voltage]\nvout.r [motor number] [mode]\nout.w [motor number] [enable]\nout.r [motor number]\nmove.w [motor number] [full steps, eighth steps]\nmove.r [motor number]\ncalib.w [motor number]\nspeed.w [motor number] [speed]\nspeed.r [motor number]\naccel.toggle\nround.toggle\nalt.toggle\nback.toggle\nid?\n");
     }
     else {
         printf("Command not recognized.\nType 'help' for list of commands.\n");
@@ -1188,7 +1220,7 @@ void amo6_screen_processShortPress () {
             _delay_ms(2);
             for(i=0;i<move_button;i++) amo6_screen_select[i]=0;
             for(i=move_button+1;i<AMO6_SCREEN_TAGS;i++) amo6_screen_select[i]=0;
-            if (amo7_motors[amo7_stepper_motor_number].enable && !amo7_alt_mode) amo7_move_config(amo7_stepper_motor_number);
+            if (amo7_motors[amo7_stepper_motor_number].enable && !amo7_alt_mode) amo7_move_config(amo7_stepper_motor_number, false);
             break;
         case calibrate_button	:
             AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -1202,7 +1234,7 @@ void amo6_screen_processShortPress () {
                     amo7_motors[amo7_stepper_motor_number].step_holder = 0;
                 }
                 else if (amo7_motors[amo7_stepper_motor_number].sensor){
-                    amo7_waveplate_calib(amo7_stepper_motor_number);
+                    amo7_move_config(amo7_stepper_motor_number, true);
                 }
             }
             break;
@@ -1345,8 +1377,7 @@ void amo7_background_stepping (){
                 }
                 ocr_tmp = round(amo7_starting_delay_us/amo7_timer_val_to_us);
             }
-            OCR1AH = ocr_tmp >> 8;
-            OCR1AL = ocr_tmp & 0xff;
+            OCR1A = ocr_tmp;
             amo7_motor_moving = true;
             TCCR1B |= _BV(CS11);    //enable timer and set prescaler to 8
         }
@@ -1420,22 +1451,28 @@ void amo7_motor_config(int motor_num, bool dir, int msn) {
     AMO7_DRV_DAC_PORT &= 0xf1;                          //Set A1-A3 low
 }
 
-void amo7_move_config (int motor_num){
-    if (!amo7_alt_mode){                             //do nothing if in alt mode
-        int rounding_steps = amo7_motors[motor_num].move_holder % 8;
+void amo7_move_config (int motor_num, bool calib){
+    int rounding_steps = amo7_motors[motor_num].move_holder % 8;
+    if (calib){
+        amo7_motors[motor_num].move_holder = 358400;
+    }
+    else {
         amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder - amo7_motors[motor_num].move_holder;
         if (amo7_motors[motor_num].move_holder == 0){   //reset move_holder and exit
             amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder;
             return;
-        }                                          
-        amo7_motors[motor_num].enable = false;          //stops further instructions to motor
-        //update queue
-        amo7_step_queue[amo7_queue_index][0] = motor_num;
-        amo7_step_queue[amo7_queue_index][1] = rounding_steps;
-        amo7_step_queue[amo7_queue_index][2] = amo7_motors[motor_num].move_holder>0 ? true:false;
-        amo7_motors[motor_num].move_holder = labs(amo7_motors[motor_num].move_holder);
-        amo7_queue_index += 1;
+        }
     }
+    amo7_motors[motor_num].enable = false;          //stops further instructions to motor
+    //update queue
+    amo7_step_queue[amo7_queue_index][0] = motor_num;
+    amo7_step_queue[amo7_queue_index][1] = rounding_steps;
+    amo7_step_queue[amo7_queue_index][2] = amo7_motors[motor_num].move_holder>0 ? true:false;
+    if (amo7_step_queue[amo7_queue_index][2] && amo7_back_account){
+        
+    }
+    amo7_motors[motor_num].move_holder = labs(amo7_motors[motor_num].move_holder);
+    amo7_queue_index += 1;
 }
 
 void amo7_manual_stepping (int motor_num, int ms, int steps) {
@@ -1466,34 +1503,5 @@ void amo7_manual_stepping (int motor_num, int ms, int steps) {
         _delay_ms(1);
         steps -= 1;
     }
-}
-
-void amo7_waveplate_calib (int motor_num){
-    volatile uint8_t *pin = 0;
-    int sensor_pin = 0;
-    switch (motor_num % 3){
-        case 0:
-            pin = &AMO7_FEEDBACK_PIN1;
-            sensor_pin = 0;
-            break;
-        case 1:
-            pin = &AMO7_FEEDBACK_PIN2;
-            sensor_pin = 7;
-            break;
-        case 2:
-            pin = &AMO7_FEEDBACK_PIN2;
-            sensor_pin = 3;
-            break;
-    }
-    amo7_board_config(motor_num, true);     //set up motor control
-    amo7_board_config(motor_num, false);    //set up motor feedback
-    bool light = (*pin & _BV(sensor_pin));
-    while (light){                    //step until sensor is low (blocked)
-        amo7_manual_stepping(motor_num, 0, 1);
-        light = *pin & _BV(sensor_pin);
-    }
-    amo7_motors[motor_num].step_holder = 0;
-    amo7_motors[motor_num].move_holder = 0;
-    printf("   calibrated.");
 }
 #endif // AMO7_H
