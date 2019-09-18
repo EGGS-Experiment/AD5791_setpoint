@@ -53,9 +53,10 @@ const char firmware_id[] = "1.0.0";
 #define AMO7_BOARD_PIN_3    PC3
 #define AMO7_BOARD_PORT     PORTC
 #define AMO7_BOARD_DDR      DDRC
+#define AMO7_BOARD_PORT_R   PORTC
 
-#define AMO7_FEEDBACK_PIN1  PINJ
-#define AMO7_FEEDBACK_PIN2  PINK
+#define AMO7_FEEDBACK_PORT1_R   PINJ
+#define AMO7_FEEDBACK_PORT2_R   PINK
 #define AMO7_FEEDBACK_DDR2  DDRK
 
 //  Buttons (AMO6)
@@ -100,8 +101,9 @@ void  amo6_serial_parse   ();
 #define CLEO_SELECT		0xADD8E6UL
 #define CLEO_TEC_ON		0x98FB98UL
 #define CLEO_TEC_OFF		0xFF7256UL
-uint32_t amo6_screen_text_color = MY_BLACK;
-uint32_t amo6_screen_line_color = MY_DARKBLUE;
+
+#define amo6_screen_text_color  0x000000UL  //MY_BLACK
+#define amo6_screen_line_color  0x004166UL  //MY_DARKBLUE
 
 #define AMO6_SCREEN_OFFSET  1
 
@@ -182,6 +184,36 @@ Individual_Motor amo7_motors[12] {
     Individual_Motor(1.8, true),  //12
 };
 
+/*class Queue {
+    int length, dimensions;
+    public:
+        Queue (int a, int b) {
+            length = a;
+            dimensions = b;
+        }
+        void get (int ind) {
+            return;
+        }
+        void enqueue (){
+            if (index < length){
+                
+            }
+        }
+        void dequeue (){
+            if (index < length){
+                
+                index -= 1;
+            }            
+        }
+        void getfront (){
+        }
+    private:
+        int index = 0;
+        
+};
+
+Queue amo7_moving_queue(amo7_max_stepper_motor_number, 4);*/
+
         //Screen variables
 int          amo7_microstep_number           = 0;    //Tracks microstepping display & config
 int          amo7_stepper_motor_number       = 0;    //Tracks active stepper motor
@@ -214,5 +246,6 @@ void amo7_board_config           (int motor_num, bool out);
 void amo7_motor_config           (int motor_num, bool dir, int msn);
 void amo7_move_config            (int motor_num, bool calib);
 void amo7_manual_stepping        (int motor_num, int ms, int steps);
+bool amo7_sensor_feedback        (int motor_num);
 
 #endif // AMO7_HH

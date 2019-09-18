@@ -32,7 +32,7 @@ void amo7_init ()
     AMO7_BOARD_PORT   = 0x00;
     
     //sensor interrupt init
-    PCICR |= (_BV(PCIE2) | _BV(PCIE1)); //PCINT0 is enabled by switches
+    //PCICR |= (_BV(PCIE2) | _BV(PCIE1));
     PCMSK1 |= _BV(PCINT9);
     PCMSK2 |= (_BV(PCINT19) | _BV(PCINT23));
     
@@ -145,28 +145,13 @@ ISR(TIMER1_COMPA_vect){
 
 ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT2
 ISR(PCINT2_vect){
-    volatile uint8_t *pin = 0;
-    int sensor_pin = 0;
-    switch (amo7_step_queue[0][0] % 3){
-        case 0:
-            pin = &AMO7_FEEDBACK_PIN1;
-            sensor_pin = 0;
-            break;
-        case 1:
-            pin = &AMO7_FEEDBACK_PIN2;
-            sensor_pin = 7;
-            break;
-        case 2:
-            pin = &AMO7_FEEDBACK_PIN2;
-            sensor_pin = 3;
-            break;
-    }
-    if (!(*pin & _BV(sensor_pin))){
+    printf("thkim\n");
+    if (!amo7_sensor_feedback(amo7_step_queue[0][0]) && amo7_motors[amo7_step_queue[0][0]].sensor){
         amo7_motors[amo7_step_queue[0][0]].step_holder = 0;
         amo7_motors[amo7_step_queue[0][0]].move_holder = 0;
-        printf("   calibrated motor %d\n", amo7_step_queue[0][0]);
+        printf("   calibrated motor %d\n", amo7_step_queue[0][0]+1);
+        PCICR &= ~(_BV(PCIE2) | _BV(PCIE1));        //disable pcint interrupts
     }
-    printf("thkim\n");
 }
 
 void amo6_buttons_update () {
@@ -1080,6 +1065,7 @@ void amo7_dac_init() {
 void amo7_stepper_dac_update (int motor_num, int mode) {
     uint16_t dac_input = 0x3000;        //command code 0011
     uint8_t address_code = 2*(motor_num % 3);
+    uint8_t portc_tmp = AMO7_BOARD_PORT_R;  //store current board port settings
     amo7_board_config(motor_num, true);
     switch (mode){                      //mode: 0 = holding, 1 = moving, 2 = pfd
         case 0:
@@ -1112,6 +1098,7 @@ void amo7_stepper_dac_update (int motor_num, int mode) {
         AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);
     }
     AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);        //CS/LD high to finish serial input
+    AMO7_BOARD_PORT = portc_tmp;                    //restore board port
 }
 
 void amo7_background_stepping (){
@@ -1204,6 +1191,7 @@ void amo7_motor_config(int motor_num, bool dir, int msn) {
     int motor_on_board = motor_num % 3;
     int ms_shift = 14 - 5*(motor_on_board);  //Shifts microstepping to appropriate pin output
     int board_num_min = motor_num-(motor_on_board);
+    uint8_t portc_tmp = AMO7_BOARD_PORT_R;
     amo7_board_config(motor_num, true);
     reg_input |= msn<<ms_shift;
     reg_input |= dir<<(ms_shift-1);
@@ -1236,14 +1224,17 @@ void amo7_motor_config(int motor_num, bool dir, int msn) {
     }
     AMO7_DRV_DAC_PORT |= _BV(AMO7_DRV_LOAD);
     AMO7_DRV_DAC_PORT &= 0xf1;                          //Set A1-A3 low
+    AMO7_BOARD_PORT = portc_tmp;
 }
 
 void amo7_move_config (int motor_num, bool calib){
-    int rounding_steps = amo7_motors[motor_num].move_holder % 8;
-    if (calib){
-        amo7_motors[motor_num].move_holder = 358400;
+    int rounding_steps = 0;
+    if (calib && amo7_sensor_feedback(motor_num)){
+        amo7_motors[motor_num].move_holder = amo7_max_holder_val;
+        PCICR |= (_BV(PCIE2) | _BV(PCIE1));
     }
     else {
+        rounding_steps = amo7_motors[motor_num].move_holder % 8;
         amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder - amo7_motors[motor_num].move_holder;
         if (amo7_motors[motor_num].move_holder == 0){   //reset move_holder and exit
             amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder;
@@ -1290,5 +1281,26 @@ void amo7_manual_stepping (int motor_num, int ms, int steps) {
         _delay_ms(1);
         steps -= 1;
     }
+}
+
+bool amo7_sensor_feedback (int motor_num) {
+    amo7_board_config(motor_num, false);
+    volatile uint8_t *pin = 0;
+    int sensor_pin = 0;
+    switch (motor_num % 3){
+        case 0:
+            pin = &AMO7_FEEDBACK_PORT1_R;
+            sensor_pin = 0;
+            break;
+        case 1:
+            pin = &AMO7_FEEDBACK_PORT2_R;
+            sensor_pin = 7;
+            break;
+        case 2:
+            pin = &AMO7_FEEDBACK_PORT2_R;
+            sensor_pin = 3;
+            break;
+    }
+    return *pin & _BV(sensor_pin);
 }
 #endif // AMO7_H
