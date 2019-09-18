@@ -229,7 +229,6 @@ volatile bool amo7_motor_moving               = false;
 volatile int  amo7_motor_shift                ;
 volatile long amo7_steps_to_max_min           ;
 volatile long amo7_accel_steps_tmp            ;
-volatile bool amo7_step_rising                = true;
 
         //Mode options
 volatile bool amo7_alt_mode                   = false;  //alt mode: manual and waveplate calib
