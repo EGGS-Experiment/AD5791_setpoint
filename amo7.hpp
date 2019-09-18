@@ -147,6 +147,8 @@ ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT2
 ISR(PCINT2_vect){
     printf("thkim\n");
     if (!amo7_sensor_feedback(amo7_step_queue[0][0]) && amo7_motors[amo7_step_queue[0][0]].sensor){
+        printf("light: %d\n", amo7_sensor_feedback(amo7_step_queue[0][0]));
+        printf("PINJ: %x\n", PINJ);
         amo7_motors[amo7_step_queue[0][0]].step_holder = 0;
         amo7_motors[amo7_step_queue[0][0]].move_holder = 0;
         printf("   calibrated motor %d\n", amo7_step_queue[0][0]+1);
@@ -1105,6 +1107,7 @@ void amo7_background_stepping (){
     if (amo7_queue_index != 0 && !amo7_motor_moving){
         if (amo7_new_motor){                 
             printf("   new motor\n");
+            amo7_board_config(amo7_step_queue[0][0], true);        //set board
             amo7_stepper_dac_update(amo7_step_queue[0][0], 1);     //change to moving voltage
             amo7_new_motor = false;
             if (amo7_rounding_mode) {           //move rounding steps
