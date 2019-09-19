@@ -191,28 +191,16 @@ Individual_Motor amo7_motors[12] {
             length = a;
             dimensions = b;
         }
-        void get (int ind) {
-            return;
-        }
-        void enqueue (){
-            if (index < length){
-                
-            }
-        }
-        void dequeue (){
-            if (index < length){
-                
-                index -= 1;
-            }            
-        }
-        void getfront (){
-        }
+        void get     ();
+        bool empty   ();
+        void enqueue ();
+        void dequeue ();
+        void getfront();
     private:
         int index = 0;
-        
 };
 
-Queue amo7_moving_queue(amo7_max_stepper_motor_number, 4);*/
+Queue amo7_moving_queue(amo7_max_stepper_motor_number, 3);*/
 
         //Screen variables
 int          amo7_microstep_number           = 0;    //Tracks microstepping display & config

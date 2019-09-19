@@ -141,7 +141,7 @@ ISR(TIMER1_COMPA_vect){
 ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT2
 ISR(PCINT2_vect){
     printf("thkim\n");
-    if (!amo7_sensor_feedback(amo7_step_queue[0][0]) && amo7_motors[amo7_step_queue[0][0]].sensor){
+    if (!amo7_sensor_feedback(amo7_step_queue[0][0])){
         printf("light: %d\n", amo7_sensor_feedback(amo7_step_queue[0][0]));
         printf("PINJ: %x\n", PINJ);
         amo7_motors[amo7_step_queue[0][0]].step_holder = 0;
@@ -1222,6 +1222,8 @@ void amo7_move_config (int motor_num, bool calib){
     int rounding_steps = 0;
     if (calib && amo7_sensor_feedback(motor_num)){
         amo7_motors[motor_num].move_holder = amo7_max_holder_val;
+        printf("debug 1: %ld\n", amo7_motors[motor_num].move_holder);
+        _delay_ms(50);
         PCICR |= (_BV(PCIE2) | _BV(PCIE1));
     }
     else {
@@ -1292,6 +1294,6 @@ bool amo7_sensor_feedback (int motor_num) {
             sensor_pin = 3;
             break;
     }
-    return *pin & _BV(sensor_pin);
+    return (*pin & _BV(sensor_pin));
 }
 #endif // AMO7_H
