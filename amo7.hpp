@@ -1224,6 +1224,7 @@ void amo7_move_config (int motor_num, bool calib){
         amo7_motors[motor_num].move_holder = amo7_max_holder_val;
         printf("debug 1: %ld\n", amo7_motors[motor_num].move_holder);
         _delay_ms(50);
+        PCIFR = 0xff;
         PCICR |= (_BV(PCIE2) | _BV(PCIE1));
     }
     else {
