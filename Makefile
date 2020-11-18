@@ -91,6 +91,7 @@ CXX        := avr-g++
 LD         := avr-ld
 OBJCOPY    := avr-objcopy
 AVRDUDE    := avrdude
+FTDI       := ./ft232r_util_s
 MINICOM    := minicom
 
 override CFLAGS  := -O2 -Wall -pedantic -std=iso9899:1999 \
@@ -142,7 +143,7 @@ install-post:
 
 program: $(TARGET).hex #$(TARGET).eep
 # write flash
-	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$(TARGET).hex
+	$(FTDI) -r && $(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$(TARGET).hex
 # write flash and eeprom
 #	$(AVRDUDE) $(AVRDUDE_FLAGS) -U flash:w:$(TARGET).hex \
 #	  -U eeprom:w:$(TARGET).eep
