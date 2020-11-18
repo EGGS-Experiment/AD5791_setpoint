@@ -7,8 +7,7 @@
 //////////////////////////////////////////////////////////////////////////////////////
 
 // AMO7
-void amo7_init ()
-{
+void amo7_init () {
     // hardware i/o config
     AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR);//output
     AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
@@ -79,9 +78,10 @@ void amo6_buttons_init () {
     PCMSK0 |=  _BV(PCINT5);//enable interrupt for the pin
 }
 
+//Interrupts
 ISR(INT2_vect, ISR_ALIASOF(INT5_vect)); //map ENC_A to unused INT5
 ISR(INT1_vect, ISR_ALIASOF(INT5_vect)); //map ENC_B to unused INT5
-ISR(INT5_vect){ //ENC_TURN
+ISR(INT5_vect){     //ENC_TURN
     static uint8_t old_AB = 0;  //lookup table index  
     static const int8_t enc_states[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};  //encoder lookup table
     old_AB <<= 2;  //store previous state
@@ -109,7 +109,7 @@ ISR(PCINT0_vect){   //SW1 SW2
     sw2_old = sw2_now;
 }
 
-ISR(TIMER1_COMPA_vect){
+ISR(TIMER1_COMPA_vect){     //motor stepping
     TCCR1B &= ~(_BV(CS11)); //turn off timer
     long current_tmp = amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter);
     if (current_tmp != 0) {
@@ -139,11 +139,9 @@ ISR(TIMER1_COMPA_vect){
 }
 
 ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT2
-ISR(PCINT2_vect){
+ISR(PCINT2_vect){           //calibration
     printf("thkim\n");
     if (!amo7_sensor_feedback(amo7_step_queue[0][0])){
-        printf("light: %d\n", amo7_sensor_feedback(amo7_step_queue[0][0]));
-        printf("PINJ: %x\n", PINJ);
         amo7_motors[amo7_step_queue[0][0]].step_holder = 0;
         amo7_motors[amo7_step_queue[0][0]].move_holder = 0;
         printf("   calibrated motor %d\n", amo7_step_queue[0][0]+1);
@@ -867,16 +865,16 @@ void amo6_screen_draw () {
     }
     CleO.StringExt(FONT_SANS_2, 465, 20, amo6_screen_text_color, MM, 0, 0, "o");
     
-    //Calibrate Button
+    //Zero/Calibrate Button
     CleO.Tag(calibrate_button);
     CleO.RectangleColor(amo7_motors[amo7_stepper_motor_number].enable ? MY_GREEN : MY_RED);
     CleO.RectangleXY(400-2*AMO6_SCREEN_OFFSET, 120-AMO6_SCREEN_OFFSET, 160-AMO6_SCREEN_OFFSET, 80-AMO6_SCREEN_OFFSET);
     if (amo7_alt_mode){
-        CleO.StringExt(FONT_SANS_2, 400, 110, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
-        CleO.StringExt(FONT_SANS_2, 400, 130, amo6_screen_text_color, MM, 0, 0, "WAVEPLATE");
+        CleO.StringExt(FONT_SANS_2, 400, 110, amo6_screen_text_color, MM, 0, 0, "ZERO");
+        CleO.StringExt(FONT_SANS_2, 400, 130, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
     }
     else {
-        CleO.StringExt(FONT_SANS_3, 400, 120, amo6_screen_text_color, MM, 0, 0, "CALIBRATE");
+        CleO.StringExt(FONT_SANS_3, 400, 120, amo6_screen_text_color, MM, 0, 0, "ZERO");
     }
     
     //Fine Steps
@@ -1097,7 +1095,6 @@ void amo7_stepper_dac_update (int motor_num, int mode) {
 void amo7_background_stepping (){
     if (amo7_queue_index != 0 && !amo7_motor_moving){
         if (amo7_new_motor){                 
-            printf("   new motor\n");
             amo7_stepper_dac_update(amo7_step_queue[0][0], 1);     //change to moving voltage
             amo7_new_motor = false;
             if (amo7_rounding_mode) {           //move rounding steps
@@ -1222,7 +1219,6 @@ void amo7_move_config (int motor_num, bool calib){
     int rounding_steps = 0;
     if (calib && amo7_sensor_feedback(motor_num)){
         amo7_motors[motor_num].move_holder = amo7_max_holder_val;
-        printf("debug 1: %ld\n", amo7_motors[motor_num].move_holder);
         _delay_ms(50);
         PCIFR = 0xff;
         PCICR |= (_BV(PCIE2) | _BV(PCIE1));

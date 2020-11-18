@@ -1,7 +1,7 @@
 AMO7 - Stepper Motor Controller
 ===============================
 Hardware: v 1.0.0
-Software: v 1.0.0
+Software: v 1.1.0
 ===============================
 
 -------------------------------
@@ -137,10 +137,6 @@ AMO7 only works with bipolar stepper motors. Motors must be connected to a DB9 c
 When acceleration mode is on, the motor will accelerate if 1) its set speed is greater than the base speed (500 steps/second), and 2) there are enough steps to fully accelerate and decelerate.
 If condition 1) is not met, the motor will simply move at the set speed. If condition 2) is not met, the motor will simply move at the base speed (500 steps/second).
 If acceleration mode is off, the motor will simply start at the speed specified by speed.w.
-
-	***Backlash accounting:
-
-If motors 
 
 	Orientation:
 
