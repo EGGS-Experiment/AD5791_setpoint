@@ -13,7 +13,7 @@
 const char device_name[] = "Stepper Motor Controller";
 const char device_id[]   = "AMO7";
 const char hardware_id[] = "1.0.0";
-const char firmware_id[] = "1.0.0";
+const char firmware_id[] = "1.1.0";
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Declaration
@@ -151,6 +151,7 @@ void  amo6_screen_processShortPress  ();
 #define      amo7_timer_val_to_us           1       //Convert timer value to us, = 1e6 (1s in us) * 8 (prescaler) * 2 (1:1 high:low) / 1.6e7 (clock)
 #define      amo7_accel_rate                5       //shorten delay by 5us/s
 #define      amo7_backlash_constant         10      //backlash from backlash device
+#define      amo7_calib_offset              1000    //offset steps before/after calibration
 
 struct Individual_Motor {
     Individual_Motor (float angle, bool feedback) {
@@ -184,30 +185,12 @@ Individual_Motor amo7_motors[12] {
     Individual_Motor(1.8, true),  //12
 };
 
-/*class Queue {
-    int length, dimensions;
-    public:
-        Queue (int a, int b) {
-            length = a;
-            dimensions = b;
-        }
-        void get     ();
-        bool empty   ();
-        void enqueue ();
-        void dequeue ();
-        void getfront();
-    private:
-        int index = 0;
-};
-
-Queue amo7_moving_queue(amo7_max_stepper_motor_number, 3);*/
-
         //Screen variables
 int          amo7_microstep_number           = 0;    //Tracks microstepping display & config
 int          amo7_stepper_motor_number       = 0;    //Tracks active stepper motor
 
         //Background queue
-volatile int  amo7_step_queue[12][3]          ;       //0=motor num, 1=rounding_steps, 2-5=dir
+volatile int  amo7_step_queue[12][3]          ;       //0=motor num, 1=rounding_steps, 2=dir
 int           amo7_queue_index                = 0;    //Tracks how many motors are queued up
 bool          amo7_new_motor                  = true;
 volatile int  amo7_queued_microstep_counter   = false;//Tracks background microstepping
