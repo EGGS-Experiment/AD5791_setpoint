@@ -95,32 +95,34 @@ void  amo6_serial_parse   ();
 #define MY_DARKBLUE 0x004166UL
 #define MY_PINK     0xe9d3ebUL
 #define MY_BLACK    0x000000UL
+#define MY_GREY     0x949494UL
 #define MY_WHITE    0xffffffUL
 #define MY_PURPLE   0xb3b3ccUL
 #define MY_REDRED   0xff0000UL
 #define CLEO_SELECT		0xADD8E6UL
 #define CLEO_TEC_ON		0x98FB98UL
-#define CLEO_TEC_OFF		0xFF7256UL
+#define CLEO_TEC_OFF	0xFF7256UL
 
 #define amo6_screen_text_color  0x000000UL  //MY_BLACK
 #define amo6_screen_line_color  0x004166UL  //MY_DARKBLUE
 
 #define AMO6_SCREEN_OFFSET  1
 
-enum {
+enum{
     amo6_screen_null_tag         , // 0
     moving_voltge_output         , // 1
     coarse_display               , // 2
     step_counter                 , // 3
     on_off_switch                , // 4
     calibrate_button             , // 5
-    move_button                  , // 6
-    holding_voltage_output       , // 7
-    fine_step_adjustment         , // 8
-    stepper_motor_counter        , // 9
-    screen_bug                   , // 10
+    zero_button                  , // 6
+    move_button                  , // 7
+    holding_voltage_output       , // 8
+    fine_step_adjustment         , // 9
+    stepper_motor_counter        , // 10
+    screen_bug                   , // 11
 };
-#define AMO6_SCREEN_TAGS 11	
+#define AMO6_SCREEN_TAGS 12	
 bool amo6_screen_select[AMO6_SCREEN_TAGS];
 
 int16_t  amo6_screen_x  , amo6_screen_y    ;
@@ -190,7 +192,7 @@ int          amo7_microstep_number           = 0;    //Tracks microstepping disp
 int          amo7_stepper_motor_number       = 0;    //Tracks active stepper motor
 
         //Background queue
-volatile int  amo7_step_queue[12][3]          ;       //0=motor num, 1=rounding_steps, 2=dir
+volatile int  amo7_step_queue[12][4]          ;       //0=motor#,1=rounding_steps,2=dir,3=calib?
 int           amo7_queue_index                = 0;    //Tracks how many motors are queued up
 bool          amo7_new_motor                  = true;
 volatile int  amo7_queued_microstep_counter   = false;//Tracks background microstepping

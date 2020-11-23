@@ -86,6 +86,11 @@ Displays the position of the motor in full steps and eighth steps.
 Triggers calibration.
 If the specified motor is currently queued up to move, then calib.w will do nothing.
 
+	zero.w [motor number]
+
+Sets current position to zero.
+If the specified motor is currently queued up to move, then calib.w will do nothing.
+
 	speed.w [motor number] [speed]
 
 Sets the motor speed in steps/second. The minimum speed is 15.38 steps/second, with a maximum of 10k steps/second. The default speed for all motors is set at 1000 steps/second.
