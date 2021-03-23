@@ -24,16 +24,21 @@ void amo7_init () {
     AMO7_BOARD_DDR      = 0xff; //C0-C3 enable input dig. iso., C4-C7 enable feedback dig. iso.
     AMO7_FEEDBACK_DDR2  = 0x00; //PORTK is all feedback
     
-    // hardware init
-    TCCR1B |= _BV(WGM12);  //set CTC mode
-    TIMSK1 |= _BV(OCIE1A); //enable OCR1A match interrupt        
+    //Timer 1 Init
+    TCCR1B |= _BV(WGM12);  //set CTC mode for Timer 1
+    TIMSK1 |= _BV(OCIE1A); //enable OCR1A match interrupt
+    
+    //hardware init
     AMO7_DRV_DAC_PORT = (_BV(AMO7_DRV_CLEAR) | _BV(AMO7_DAC_LOAD) | _BV(AMO7_DAC_CLEAR));
     AMO7_BOARD_PORT   = 0x00;
     
     //sensor interrupt init
-    PCICR |= (_BV(PCIE2) | _BV(PCIE1));         //enable interrupts
-    PCMSK1 |= _BV(PCINT9);                      //allow interrupts from sensors
-    PCMSK2 |= (_BV(PCINT19) | _BV(PCINT23));
+    PCICR |= (_BV(PCIE2) | _BV(PCIE1));     //enable interrupts
+    
+    //retreat timer init
+    TCCR3B |= _BV(WGM32);       //set CTC mode for Timer 3
+    TIMSK3 |= _BV(OCIE3A);      //enable OCR3A match interrupt
+    OCR3A = amo7_retreat_delay; //load 50 ms delay into register 
     
     //regular old init
     amo6_screen_init();
@@ -111,53 +116,64 @@ ISR(PCINT0_vect){   //SW1 SW2
 
 ISR(TIMER1_COMPA_vect){     //main motor stepping sequence
     TCCR1B &= ~(_BV(CS11)); //turn off timer
+    //count number of steps remaining
     long current_tmp = amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter);
-    if (current_tmp != 0) {
-        if (AMO7_STEP_PORT & _BV(amo7_motor_shift)){    //step low
+    if (current_tmp != 0) {                                     //move only if there are steps to move
+        if (AMO7_STEP_PORT & _BV(amo7_motor_shift)){            //step low if high
             AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         }
-        else {                                          //step high
-            AMO7_STEP_PORT |= _BV(amo7_motor_shift); 
-            amo7_motors[amo7_step_queue[0][0]].move_holder -= _BV(3 - amo7_queued_microstep_counter);
-            if (amo7_local_acceleration){   //adjust acceleration
-                if (amo7_accel_steps_tmp > 0){
+        else {                              
+            AMO7_STEP_PORT |= _BV(amo7_motor_shift);            //step high if low
+            amo7_motors[amo7_step_queue[0][0]].move_holder -= _BV(3 - amo7_queued_microstep_counter);   //decrement move_holder
+            if (amo7_local_acceleration){                       //adjust acceleration
+                if (amo7_accel_steps_tmp > 0){                  //decreasing time step to accelerate
                     OCR1A -= amo7_accel_rate;
                     --amo7_accel_steps_tmp;
                 }
-                else if(current_tmp < amo7_steps_to_max_min){
+                else if(current_tmp < amo7_steps_to_max_min){   //increase time step if decelerating
                     OCR1A += amo7_accel_rate;
                 }
             }
         }
-        TCCR1B |= _BV(CS11);  //turn on timer
+        TCCR1B |= _BV(CS11);                            //turn on step timer
     }
-    else {
+    else {                                              //if no steps left, stop stepping
         AMO7_STEP_PORT &= ~(_BV(amo7_motor_shift));
         amo7_local_acceleration = false;
-        amo7_motor_moving = false;      //tell background stepping to stop
+        amo7_motor_moving = false;                      //tell background stepping to stop
     }
 }
 
-ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT2
-ISR(PCINT2_vect){           //calibration
-    if (!amo7_sensor_feedback(amo7_step_queue[0][0]) && amo7_motor_moving){
-        if (amo7_step_queue[0][3] == 1){
-            amo7_motors[amo7_step_queue[0][0]].step_holder = 0;
-            amo7_motor_config(amo7_step_queue[0][0], 0, 0); //motor moves against calib
-            amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_calib_offset;   //offset
-            amo7_motor_moving = false;      //let background stepping do the rest
+ISR(TIMER3_COMPA_vect){                     //retreat delay timer
+    TCCR3B &= ~(_BV(CS32) | _BV(CS30));     //turn off delay timer
+    amo7_motor_moving = false;              //let background stepping know to move on
+    TIMSK1 |= _BV(OCIE1A);                  //turn on timer 1 interrupt
+}
+
+ISR(PCINT1_vect, ISR_ALIASOF(PCINT2_vect)); //map PCINT1 to PCINT2 since they both provoke same response
+
+ISR(PCINT2_vect){   //HOME position interrupt
+    //check if motor is moving, has hit home, and is not doing a move in alt mode
+    if ((!amo7_sensor_feedback(amo7_step_queue[0][0])) && amo7_motor_moving && !(amo7_alt_mode && (amo7_step_queue[0][3] == 0))){
+        amo7_motors[amo7_step_queue[0][0]].step_holder = 0;                         //clear step holder
+        amo7_motor_config(amo7_step_queue[0][0], (amo7_step_queue[0][2] ^ 1), 0);   //reverse direction
+        amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_calib_offset;         //move offset
+        TCCR1B &= ~(_BV(CS11));                                                     //turn off step timer
+        PCMSK1 &= ~(_BV(PCINT9));                                                   //turn off HOME interrupts
+        PCMSK2 &= ~(_BV(PCINT19) | _BV(PCINT23));
+        PCIFR = 0xff;                                                               //clear PCI flag register
+        if (amo7_step_queue[0][3] == 1){    //print calibration message if calibrating
             printf("\tcalibrated motor %d\n", amo7_step_queue[0][0]+1);
         }
-        else if (!amo7_alt_mode){
-            printf("cannot move motor: pin is in home position\n");
-            amo7_motor_config(amo7_step_queue[0][0], 0, (amo7_step_queue[0][2] ^ 1)); //reverse direction
-            amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_calib_offset;   //offset
-            amo7_motor_moving = false;      //let background stepping do the rest
+        else{                               //otherwise print error message
+            printf("error: cannot move motor, pin is in home position\n");
         }
+        TIMSK1 &= ~(_BV(OCIE1A));           //turn off timer 1 interrupt
+        TCCR3B |= (_BV(CS32) | _BV(CS30));  //start retreat delay timer
     }
 }
 
-void amo6_buttons_update () {
+void amo6_buttons_update(){
     static int tag_old = 0;
     int tag;
     double tmp;
@@ -535,7 +551,7 @@ void amo6_buttons_update () {
 }
 
 // Serial (AMO6) (edited for AMO7)
-void amo6_serial_update () {
+void amo6_serial_update(){
     char getchar;
     static int i=0;
     static int j_prev=0;
@@ -575,7 +591,7 @@ void amo6_serial_update () {
     }
 }
 
-void amo6_serial_parse () {
+void amo6_serial_parse(){
     char delimiters[] = " ";
     char *token[8];
     int i=1;
@@ -780,7 +796,7 @@ void amo6_serial_parse () {
 }
 
 //Screen (AMO6) (edited for AMO7)
-void amo6_screen_debug () {
+void amo6_screen_debug(){
     printf("CleO Version = %d\n", CleO.Version());
     printf("CleO ID = %d\n", CleO.ModuleIdentifier());
     CleO.Noop();
@@ -789,7 +805,7 @@ void amo6_screen_debug () {
     //printf("spi_flex_read_write_byte = 0x%x\n", spi_flex_read_write_byte(0, 0x8e));
 }
 
-void amo6_screen_init () {
+void amo6_screen_init(){
     char buf_text[20];
     AMO6_CLEO_nPWR_DDR  |=  _BV(AMO6_CLEO_nPWR); //output
     AMO6_CLEO_nPWR_PORT |=  _BV(AMO6_CLEO_nPWR); //1
@@ -818,12 +834,12 @@ void amo6_screen_init () {
     CleO.LoadFont("@Fonts/DSEG7ClassicMini-BoldItalic.ftfont");
 }
 
-void amo6_screen_update () {
+void amo6_screen_update(){
     amo6_screen_draw();
     amo6_screen_touch();
 }
 
-void amo6_screen_draw () { 
+void amo6_screen_draw(){
     // Start Drawing Screen
     CleO.Start();
     CleO.RectangleJustification(MM);
@@ -953,12 +969,12 @@ void amo6_screen_draw () {
     CleO.Show();
 }
 
-void amo6_screen_touch () {
+void amo6_screen_touch(){
     amo6_screen_processButtons();
     if (amo6_screen_short_press_detected) amo6_screen_processShortPress();
 }
 
-void amo6_screen_processButtons () {
+void amo6_screen_processButtons(){
     // Collect Tags
     //NOTE: for more than 13 tags, you must manually tag!
     CleO.TouchCoordinates(amo6_screen_x, amo6_screen_y, amo6_screen_current_dur, amo6_screen_current_tag);
@@ -1011,7 +1027,9 @@ void amo6_screen_processShortPress () {
             _delay_ms(2);
             for(i=0;i<move_button;++i) amo6_screen_select[i]=0;
             for(i=move_button+1;i<AMO6_SCREEN_TAGS;++i) amo6_screen_select[i]=0;
-            if (amo7_motors[amo7_stepper_motor_number].enable && !amo7_alt_mode) amo7_move_config(amo7_stepper_motor_number, false);
+            if (amo7_motors[amo7_stepper_motor_number].enable && !amo7_alt_mode) {
+                amo7_move_config(amo7_stepper_motor_number, false);
+            }
             break;
         case calibrate_button	:
             AMO6_BUZZER_nEN_PORT &= ~_BV(AMO6_BUZZER_nEN); //0
@@ -1066,29 +1084,31 @@ void amo6_screen_processShortPress () {
 
 //Motors (AMO7)
 void amo7_dac_init() {
-    uint32_t init_input = 8;                    //command code 0001 in reverse
-    init_input |= (15 << 4);                    //all dac address code
-    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_LOAD));             //CS/LD low to begin serial input
-    for (int i=0; i<=23; ++i){
-        AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));        //dac clocks sdi in on rising edge
-        if (init_input & _BV(0)){
-            AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_INPUT);
+    //init_input holds input for dacs as sequential 32-bit word and needs to begin wth command code 0001 in reverse
+    uint32_t init_input = 8;
+    init_input |= (15 << 4);                                //all dac address code
+    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_LOAD));             //bring CS/LD low to begin serial input
+    for (int i=0; i<=23; ++i){                              //enter in all letters of DAC input
+        AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));        //bring clock low since DAC clocks in on rising edge
+        if (init_input & _BV(0)){                           //send leftmost digit to input pin
+            AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_INPUT);       
         }
         else {
             AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_INPUT));
         }
-        AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);
-        init_input >>= 1;
+        AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);           //bring clock high to input bit
+        init_input >>= 1;                                   //move to next bit for input
     }
     AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input 
 }
 
 void amo7_stepper_dac_update (int motor_num, int mode) {
-    uint16_t dac_input = 0x3000;                //command code 0011
+    //dac_input holds input for dac as sequential 16-bit word and needs to begin wth command code: 0011
+    uint16_t dac_input = 0x3000;
     uint8_t address_code = 2*(motor_num % 3);
-    uint8_t portc_tmp = AMO7_BOARD_PORT_R;  //store current board port settings
+    uint8_t portc_tmp = AMO7_BOARD_PORT_R;      //store current board port settings
     amo7_board_config(motor_num, true);
-    switch (mode){                      //mode: 0 = holding, 1 = moving, 2 = pfd
+    switch (mode){                              //3 kinds of voltage to change: 0-holding, 1-moving, 2-pfd
         case 0:
             dac_input |= amo7_motors[motor_num].holding_voltage;   
             break;
@@ -1100,77 +1120,80 @@ void amo7_stepper_dac_update (int motor_num, int mode) {
             dac_input |= amo7_motors[motor_num].pfd_voltage;
             break;
     }
-    dac_input |= (address_code << 8);
-    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_LOAD));     //CS/LD low to begin serial input
-    for (int i=0; i<=15; ++i){
-        AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));//dac clocks sdi in on rising edge
-        if (dac_input & _BV(15)){
+    dac_input |= (address_code << 8);               //add address code to dac_input
+    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_LOAD));     //bring CS/LD low to begin serial input
+    for (int i=0; i<=15; ++i){                      //enter in all letters data of dac_input
+        AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));//bring clock low since DAC clocks in on rising edge
+        if (dac_input & _BV(15)){                   //send leftmost digit to input pin
             AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_INPUT);        
         }
         else {
             AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_INPUT));
         }
-        AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);
-        dac_input <<= 1;
+        AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);   //bring clock high to input bit
+        dac_input <<= 1;                            //move to next bit for input
     }
-    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_INPUT));    //+8 don't-care bits since message must be 24b
-    for (int i=0; i<=7; ++i){           
+    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_INPUT));    
+    for (int i=0; i<=7; ++i){                       //add +8 don't-care bits since message must be 24b
         AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));
         AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);
     }
     AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);        //CS/LD high to finish serial input
-    AMO7_BOARD_PORT = portc_tmp;                    //restore board port
+    AMO7_BOARD_PORT = portc_tmp;                    //restore previous board port
 }
 
 void amo7_background_stepping (){
-    if (amo7_queue_index != 0 && !amo7_motor_moving){   //move to next motor in queue if not already moving
-        if (amo7_new_motor){                            //need to config dac if motor is new
-            printf("\tnew motor\n");
+    if ((amo7_queue_index != 0) && !amo7_motor_moving){   //update stepping if motors are queued and not moving
+        //need to config dac and enable HOME interrupts if motor is new
+        if (amo7_new_motor){                            
+            if (!(amo7_alt_mode && (amo7_step_queue[0][3] == 0))){      //don't allow interrupts for alt move
+                PCMSK1 |= _BV(PCINT9);                      
+                PCMSK2 |= (_BV(PCINT19) | _BV(PCINT23));
+            }
+            //printf("\tnew motor\n");
             amo7_stepper_dac_update(amo7_step_queue[0][0], 1);     //change to moving voltage
             amo7_new_motor = false;
-            //if pin is on sensor, create offset opposite to calib direction
-            if ((amo7_step_queue[0][3] == 1) &&(!amo7_sensor_feedback(amo7_step_queue[0][0]))){
-                amo7_manual_stepping(amo7_step_queue[0][0], 0, -amo7_calib_offset);
-                amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_max_holder_val;
-            }
-            else if (amo7_rounding_mode) {           //move rounding steps
-                printf("\trounding: %d\n", amo7_step_queue[0][1]);
+            if (amo7_rounding_mode){   //move rounding steps
+                //printf("\trounding: %d\n", amo7_step_queue[0][1]);
                 amo7_manual_stepping(amo7_step_queue[0][0], 3, -amo7_step_queue[0][1]);
+                //we step x2 since manual stepping changes move_holder
                 amo7_motors[amo7_step_queue[0][0]].move_holder += 2*amo7_step_queue[0][1];
-            }//need x2 since manual stepping changes move_holder
-            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], 0);//config after
-        }
-        //calculate how many steps/microsteps we need to move
-        long current_steps = (amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
-        printf("\t\tsteps to move: %ld\n", current_steps);
-        //set new microstep
-        if (current_steps == 0 && (amo7_queued_microstep_counter < amo7_max_microstep_number)) {
-            ++amo7_queued_microstep_counter;
-            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], amo7_queued_microstep_counter);
-            printf("\tnew microstep: %d\n", amo7_queued_microstep_counter);
-        }
-        //reset if we are done
-        else if (current_steps == 0 && amo7_queued_microstep_counter >= amo7_max_microstep_number){
-            printf("\tend of motor\n");
-            TCCR1B &= 0xf8;
-            amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_motors[amo7_step_queue[0][0]].step_holder;
-            //update queue
-            amo7_motors[amo7_step_queue[0][0]].enable = true;
-            amo7_queued_microstep_counter = 0;
-            amo7_new_motor = true;
-            amo7_stepper_dac_update(amo7_step_queue[0][0], 0);
-            for (int i = 0; i < amo7_queue_index; ++i){
-                amo7_step_queue[i][0] = amo7_step_queue[i+1][0];    //update motor num
-                amo7_step_queue[i][1] = amo7_step_queue[i+1][1];    //update rounding steps
-                amo7_step_queue[i][2] = amo7_step_queue[i+1][2];    //update direction
-                amo7_step_queue[i][3] = amo7_step_queue[i+1][3];    //update calib?
             }
-            --amo7_queue_index;
+            amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], 0); //need to reconfig motors
         }
-        //prepare to step
-        else if (current_steps != 0){
+        //calculate steps/microsteps to move
+        long current_steps = (amo7_motors[amo7_step_queue[0][0]].move_holder >> (3 - amo7_queued_microstep_counter)) * (signbit(amo7_motors[amo7_step_queue[0][0]].move_holder)?-1:1);
+        //printf("\t\tsteps to move: %ld\n", current_steps);
+        if (current_steps == 0){    //reconfigure motors if no steps are needed
+            if (amo7_queued_microstep_counter < amo7_max_microstep_number){ //move up a microstep if needed
+                ++amo7_queued_microstep_counter;
+                amo7_motor_config(amo7_step_queue[0][0], amo7_step_queue[0][2], amo7_queued_microstep_counter);
+                //printf("\tnew microstep: %d\n", amo7_queued_microstep_counter);
+            }
+            //otherwise, reset since current motor is done
+            else if (amo7_queued_microstep_counter >= amo7_max_microstep_number){
+                //printf("\tend of motor\n");
+                TCCR1B &= ~(_BV(CS11));                                 //turn off step timer
+                amo7_motors[amo7_step_queue[0][0]].move_holder = amo7_motors[amo7_step_queue[0][0]].step_holder;
+                //update queue
+                amo7_motors[amo7_step_queue[0][0]].enable = true;
+                amo7_queued_microstep_counter = 0;
+                amo7_new_motor = true;
+                amo7_stepper_dac_update(amo7_step_queue[0][0], 0);
+                for (int i = 0; i < amo7_queue_index; ++i){             //shuffle all motors down by one
+                    amo7_step_queue[i][0] = amo7_step_queue[i+1][0];    //update motor num
+                    amo7_step_queue[i][1] = amo7_step_queue[i+1][1];    //update rounding steps
+                    amo7_step_queue[i][2] = amo7_step_queue[i+1][2];    //update direction
+                    amo7_step_queue[i][3] = amo7_step_queue[i+1][3];    //update calib
+                }
+                --amo7_queue_index;
+                PCMSK1 &= ~_BV(PCINT9); //disable HOME interruptss
+                PCMSK2 &= ~(_BV(PCINT19) | _BV(PCINT23));
+            }
+        }
+        else {      //otherwise, prepare to step
             uint16_t ocr_tmp = round(amo7_motors[amo7_step_queue[0][0]].speed_delay_us/amo7_timer_val_to_us);
-            //config accel
+            //config acceleration
             if (amo7_global_acceleration && amo7_queued_microstep_counter == 0){
                 //calculate steps needed to ramp up
                 amo7_steps_to_max_min = round((amo7_starting_delay_us - amo7_motors[amo7_step_queue[0][0]].speed_delay_us)/amo7_timer_val_to_us/amo7_accel_rate);
@@ -1185,7 +1208,7 @@ void amo7_background_stepping (){
                 ocr_tmp = round(amo7_starting_delay_us/amo7_timer_val_to_us);
             }
             OCR1A = ocr_tmp;            //load timer register
-            amo7_motor_moving = true;   
+            amo7_motor_moving = true;
             TCCR1B |= _BV(CS11);        //enable timer and set prescaler to 8
         }
     }
@@ -1193,8 +1216,8 @@ void amo7_background_stepping (){
 
 void amo7_board_config(int motor_num, bool out) {
     uint8_t board_num = 0;
-    uint8_t board_tmp = AMO7_BOARD_PORT;
-    switch ((motor_num-(motor_num % 3))/3) {
+    uint8_t board_tmp = AMO7_BOARD_PORT;    //store current state of boards
+    switch ((motor_num-(motor_num % 3))/3){ //group boards into 3s
         case 0:
             board_num = AMO7_BOARD_PIN_0;
             break;
@@ -1208,26 +1231,28 @@ void amo7_board_config(int motor_num, bool out) {
             board_num = AMO7_BOARD_PIN_3;
             break;
     }
-    if (out){
+    if (out){   //config boards to either send or receive data
         board_tmp |= 0x0f;
         board_tmp &= ~(_BV(board_num));
     }
     else {
         board_tmp &= 0x0f;
-        board_tmp |= _BV(board_num + 4);  //C0-C3 = out boards, C4-C7 = in boards 
+        board_tmp |= _BV(board_num + 4);    //C0-C3 = out boards, C4-C7 = in boards 
     }        
-    AMO7_BOARD_PORT = board_tmp;
+    AMO7_BOARD_PORT = board_tmp;            //load data into port
 }
 
 void amo7_motor_config(int motor_num, bool dir, int msn) {
-    uint16_t reg_input = 0x18C7;        //0(slp),1(r3),2(e3),6(r2),7(e2),11(r1),12(e1)
+    //reg_input holds input for shift register as sequential 16-bit word
+    //0(slp),1(r3),2(e3),6(r2),7(e2),11(r1),12(e1)
+    uint16_t reg_input = 0x18C7;            
     int motor_on_board = motor_num % 3;
-    int ms_shift = 14 - 5*(motor_on_board);  //Shifts microstepping to appropriate pin output
+    int ms_shift = 14 - 5*(motor_on_board); //shifts microstepping to appropriate pin output
     int board_num_min = motor_num-(motor_on_board);
-    amo7_board_config(motor_num, true);
-    reg_input |= msn<<ms_shift;
-    reg_input |= dir<<(ms_shift-1);
-    switch (motor_on_board){            //assign step port
+    amo7_board_config(motor_num, true);     //start talking to correct board
+    reg_input |= msn<<ms_shift;             //assign microsteppig
+    reg_input |= dir<<(ms_shift-1);         //assign direction
+    switch (motor_on_board){                //assign step port
         case 0:
             amo7_motor_shift = AMO7_STEP_PIN_0;
             break;
@@ -1243,51 +1268,53 @@ void amo7_motor_config(int motor_num, bool dir, int msn) {
             reg_input &= ~(_BV(12-5*(i%3))); 
         }
     }
-    for (int i=0; i<=15; ++i){
-        AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DRV_CLOCK));    //drv clocks in on rising edge
-        if (reg_input & _BV(0)){
+    for (int i=0; i<=15; ++i){                              //input reg_input into register
+        AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DRV_CLOCK));        //bring clock pin low
+        if (reg_input & _BV(0)){                            //input word into shift register***
             AMO7_DRV_DAC_PORT |= _BV(AMO7_DRV_INPUT);
         }
         else {
             AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DRV_INPUT));
         }
-        AMO7_DRV_DAC_PORT |= _BV(AMO7_DRV_CLOCK);
+        AMO7_DRV_DAC_PORT |= _BV(AMO7_DRV_CLOCK);           //bring clock pin high to clock in data
         reg_input >>= 1;
     }
-    AMO7_DRV_DAC_PORT |= _BV(AMO7_DRV_LOAD);
-    AMO7_DRV_DAC_PORT &= 0xf1;                          //Set A1-A3 low
+    AMO7_DRV_DAC_PORT |= _BV(AMO7_DRV_LOAD);                //load word into register
+    AMO7_DRV_DAC_PORT &= 0xf1;                              //Set A1-A3 low
 }
 
 void amo7_move_config (int motor_num, bool calib){
     int rounding_steps = 0;
-    if (calib){          //calibrate motor
+    if (calib && amo7_sensor_feedback(motor_num)){                  //check to see if we are on pin
         amo7_motors[motor_num].move_holder = amo7_max_holder_val;   //move max steps possible
         PCIFR = 0xff;                                               //clear all flags
         PCICR |= (_BV(PCIE2) | _BV(PCIE1));                         //enable interrupts
         amo7_step_queue[amo7_queue_index][3] = 1;                   //set calib bit to 1
     }
-    else if (amo7_sensor_feedback(motor_num) || amo7_alt_mode){     //move motor only if not on pin or in alt mode
+    else if (amo7_sensor_feedback(motor_num) || (amo7_alt_mode & ~(calib))){     //check to see if we are on pin or doing a move in alt mode
         rounding_steps = amo7_motors[motor_num].move_holder % 8;
         amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder - amo7_motors[motor_num].move_holder;
-        if (amo7_motors[motor_num].move_holder == 0){   //reset move_holder and exit
+        if (amo7_motors[motor_num].move_holder == 0){               //if no moves to be made, reset holders a&nd exit
             amo7_motors[motor_num].move_holder = amo7_motors[motor_num].step_holder;
             return;
         }
     }
-    else {
-        printf("cannot move motor: pin is in home position\n");
+    else {                                                          //move is otherwise illegal; return error & zero holders
+        amo7_motors[motor_num].move_holder = 0;
+        amo7_motors[motor_num].step_holder = 0;
+        printf("error: cannot move motor, pin is in home position\n");
+        return;
     }
-    amo7_motors[motor_num].enable = false;          //stops further instructions to motor
-    //update queue
-    amo7_step_queue[amo7_queue_index][0] = motor_num;
+    amo7_motors[motor_num].enable = false;                          //stops further instructions to motor
+    amo7_step_queue[amo7_queue_index][0] = motor_num;               //add motor details to queue
     amo7_step_queue[amo7_queue_index][1] = rounding_steps;
     if (calib){
-        amo7_step_queue[amo7_queue_index][2] = 1;   //always move in same dir for calib
+        amo7_step_queue[amo7_queue_index][2] = amo7_calib_dir;      //always move in same dir for calib
     }
     else {
         amo7_step_queue[amo7_queue_index][2] = amo7_motors[motor_num].move_holder>0 ? true:false;
     }
-    amo7_motors[motor_num].move_holder = labs(amo7_motors[motor_num].move_holder);
+    amo7_motors[motor_num].move_holder = labs(amo7_motors[motor_num].move_holder);  //move_holder needs to be positive (direction already stored in queue)
     ++amo7_queue_index;
 }
 
@@ -1304,28 +1331,27 @@ void amo7_manual_stepping (int motor_num, int ms, int steps) {
             tmp_motor_shift = AMO7_STEP_PIN_2;
             break;
     }
-    amo7_motors[motor_num].move_holder += steps;
-    //config direction
-    if (steps > 0) {
+    amo7_motors[motor_num].move_holder += steps;    //add steps to holders
+    if (steps > 0) {                                //configure motors
         amo7_motor_config(motor_num, 1, ms);
     }
     else if (steps < 0) {
         amo7_motor_config(motor_num, 0, ms);
         steps = abs(steps);
     }
-    while (steps > 0){
+    while (steps > 0){                              //send steps to motor
         AMO7_STEP_PORT |= _BV(tmp_motor_shift);
-        _delay_us(amo7_starting_delay_us);
+        _delay_us(amo7_starting_delay_us);          //delays can't be variables***
         AMO7_STEP_PORT &= ~(_BV(tmp_motor_shift));
         --steps;
     }
 }
 
 bool amo7_sensor_feedback (int motor_num) {
-    amo7_board_config(motor_num, false);
+    amo7_board_config(motor_num, false);    //start talking to the right board
     volatile uint8_t *pin = 0;
     int sensor_pin = 0;
-    switch (motor_num % 3){
+    switch (motor_num % 3){                 //link motor to correct pin
         case 0:
             pin = &AMO7_FEEDBACK_PORT1_R;
             sensor_pin = 0;
@@ -1339,7 +1365,7 @@ bool amo7_sensor_feedback (int motor_num) {
             sensor_pin = 3;
             break;
     }
-    return (*pin & _BV(sensor_pin));
+    return (*pin & _BV(sensor_pin));        //return value of pin
 }
 
 #endif // AMO7_H
