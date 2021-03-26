@@ -1,0 +1,457 @@
+AMO7 Development Notes
+
+Mar 15 2021 (Mon WF - W)
+- general:
+    - note: max steps is 358400 steps, which is just over one full rotation of waveplate (i.e. motor with gearbox and timing belt)
+    - removed unnecessary console messages during move commands
+    - added documentation for all control statements and header functions
+- calibration:
+    - undid v2 change (reverse rotation mount then calibrate if calibrate called while @home)
+        - now returns error message, and can only move if in alt mode
+- HOME interrupts
+    - HOME interrupts are now always off and enabled only when motors are moving and are not doing a move in alt mode
+        - this is triply gated: once in move_config, once in background_stepping, and once in the interrupt
+    - added short pause after hitting HOME position
+        - this is adjustable in the code (in amo7.h, the amo7_retreat_delay)
+        - can take a value between 64us and 4.2s
+    - if a move or calibration is issued while pin is at HOME position, then motor steps will be zeroed
+- bugs:
+    - fixed issue where motors stopped moving if motors on different boards were toggled on/off or holding voltage was changed
+        - prevented users from issuing these commands
+    - fixed issue where users were able to issue commands to motors while they were disabled through serial
+        - added motor.enable checks to serial interface
+    - fixed issue where being at home position and trying to move or calibrate froze program
+        - removed recalibrate feature
+    - fixed issue where motors were able to move despite being at home position if move command was spammed
+        - remove recalibrate feature
+    - fixed issue where motors tweaked during retreat
+        - turned off HOME interrupts after first occurrence within a move sequence and enabled them at the end
+    - fixed issue where motor would retreat in same direction as initial movement for negative steps
+        - was passing the wrong value to motor_config
+    - fixed issue where negative retreats were slower and travelled less angle than positive retreats
+        - solved through above fixes
+
+
+Nov 30 2020 (Mon W9 - F)
+- amo7_step_queue:
+    - can't redo amo7_queue_index with C++ standard template library due to limited microcontroller resources, automatic memory management of containers, and overhead
+    - added check to make sure we stay within fixed array size
+- amo7_move_config: add check to see if queue_index is at max
+- ***speeding up & better practice: TODO
+    - ***remove unnecessary labs/functions
+    - ***faster way to do labs?
+    - ***load registers faster?
+    - ***change variable scope where possible
+    - ***minimize delays (test what minimum delay time is)
+
+Nov 16 2020 (Mon W7 - F)
+- general:
+    - default speed set to 1000 steps/sec for all modes (including manual mode)
+    - encoder now changes steps 5x faster, buttons change 10x faster (when held)
+    - pin-change interrupts are now always enabled
+    - made calibrate part of home panel, removed “waveplate calibrate” function
+    - added zero (i.e. tare) functionality to screen and serial
+    - changed motor disable color to grey
+- calibration:
+    - calibration now always moves in the same direction, then moves 1000 steps in opposite direction
+    - added "recalibrate" feature: if pin is on sensor before calibration, then we move 1000 steps in opposite direction before calibrating
+    - bug: calib won’t stop when in alt mode, fixed: move_holder was used to check if calib, use amo7_step_queue[0][4] instead
+- sensor:
+    - if pin hits sensor during regular movement, then motor will stop and move 1000 steps opposite to its initial direction, then return error via serial
+    - if user attempts to move motor while pin is on sensor, error is returned via serial
+- alternate mode:
+    - sensor safeties are overridden in alternate mode for normal movement; however, calibration will still function normally
+
+Sep 16 2019 (Mon W14 - Su)
+- backlash & hysteresis: add additional pulley, const force spring
+    - we’ll need a pretty high force spring
+    - how do we attach it? epoxy?
+    - are we sure that spring has enough torque? calculate
+        - yes, just need to turn it a bit
+    - looseness was b/c of v base plate on motor
+- bug: vout.r only gives moving voltage, fixed: used strcmp wrong
+- edited loading of OCR1A registers
+    - can i do the same with control/status registers?
+- switched to queue for readability
+- use better accel variable names
+- bug: stops if V or on/off change on diff board, fixed: motor_config and dac_update call board_config twice
+    - bug: doesn’t work w/ on/off button, 1-4 ok? (exp. 1-3)
+        - b/c shift registers get reset, direction also has rpboelm
+    - warn in documentation, also warn about inaccuracy
+- bug: accel isnt as high as before?, fixed: just the motor, maybe b/c torque?
+- refactored step interrupt, rm unnecessary labs
+    - signbit is macro, likely quick?
+    - made sure rounding mode works properly
+- documentation: warned people not to change w/labs & holders otherwise problem
+- bug: negative microstep doesn’t display negative sign (i.e -0.9 deg = 0 & 4/8), fixed
+- bug: if v is set and off, then v not set when on, fixed: disabled on/off while moving
+- set waveplate calibration to background
+    - added safety to calib under move config by detecting a signal high first
+    - bug: interrupt called too often, fixed: noise from fingers etc
+    - bug: won’t stop calling isr it during startup???, fixed: only ie as needed
+    - problem was b/c dip switch was off
+- add backlash accounting; no longer needed due to spring
+    - added to documentation
+    - need old dir, another global var?
+- waveplate calib characterization:
+    - takes ~500/45000 steps = 0.9%
+
+Sep 9 2019 (Mon W13 - Su)
+- bug: board not reading PK7 pin as positive, fixed: pulldown resistor on board too low
+    - adum has 3.5v (0.7vdd) threshold for vih
+        - v is 4.8 when i plug in, why is 2.8 w/ db9?
+        - pin on cpu side is below 2v
+        - why v across collector = 2.3?
+    - PORTx is write only, need to use PINx to read
+    - works when i just connect pcb
+        - must be problem w/motors, maybe duty cycle?
+        - try decoupling capacitor, 100nf
+- bug: doesn’t move when in alt mode and serial, fixed: removed alt mode safety for move_config
+
+Sep 2 2019 (Mon W12 - Su)
+- bug: 12800 steps isn’t full rotation, fixed: forgot about timing belt
+- documentation: write about direction
+- documentation: wrote about sensor safety
+    - don’t really need safety b/c light low when calibrated
+- control sensor powered by db9 connector
+- bug: getting odd waveform from pin, fixed: ground to db9 pin
+    - grounding problem? ok when i take supply ground out
+    - create voltage divider?
+- bug: -44800 overflows steps to move again, fixed: uint16_t in isr
+    - only happens when i move all at once, both dir
+    - flashes 65536, likely: 2^16 overflow, labs?
+
+Aug 26 2019 (Mon W11 - Su)
+- bug: -4000 to 4000 overflow, fixed: abs -> labs in move_config
+- increased max movable to 200*64 full steps
+    - bug: max caps out and behaves weirdly, fixed: abs -> labs a lot
+    - changed screen to display >1e4 steps
+- documentation: wrote about losing unmoved steps in alt mode
+- documentation: wrote about max steps
+
+Aug 19 2019 (Mon W10 - Su)
+- fixed text on coarse and fine displays: negative hundreds is too big
+- bug: negative starts at -1 7/8, fixed, used abs and signbit
+- bug: accel isn’t working, fixed: steps too low, need thousands of steps before we can accelerate
+    - accel faster -> delay shortens by 5 us/step
+- created alt mode by pressing both button switches
+    - controls manual and special calibs
+- talked to nick robertson re p&a acc
+- bug: can’t go past 1000 steps, fixed: max_steps wasn’t shifted
+    - bug: 5000 goes negative, fixed: int overflow, max now 4000
+- bug: push 4000 steps and doesn’t stop ticking, rotate more and back to 3988
+    - only happens with encoder, fixed: b/c i assign val = 0
+- bug: move.w, 5000 -> -3192, fixed: needed labs, everything needs to be long
+    - maybe: var overflow and atoi -> atol, char tmp overflow?
+- bug: 2000 too fast, tweak then stalls, fixed: outside start v, need accel
+    - 9500 is outside max speed i think, depends on voltage
+- bug: tweaks during deccel, fixed: steps to max min wasn’t proper, ocr1a overflowed
+- bug: accel doesn’t work for 2k but ok for 4k, fixed: steps to max min wrong for accel rate
+- bug: not accelerating to right speed, deccel too much, fixed: wasn’t decrementing accel1 correctly
+- does rounding happen at moving or holding: at moving
+- wrote documentation for amo7
+- added safety for waveplate calib (test if sensor)
+- change ifndef to amo7
+- do i need to change interrupt priorities to prioritize stepping: no
+    - doesn’t appear to tweak
+- pin 2 on a3977 is HOME, which is input to board?
+    - controls translator? resets to home? could use for error checking?
+    - idk leave it alone
+- changed board_config, input adums have enable high
+- added little titles for each screen
+
+Aug 12 2019 (Mon W9 - Su)
+- isr stepping:
+    - bug: getting inexact TCNT values and TCNT = 0 value, fixed: wasn’t pulsing down correctly
+        - TCCR0B, TIMSK0, OCR0A, fine, values as expected
+        - moving taking longer, which indicates that isr is working - maybe problem is with stepping code
+            - i get one step on first try, none after that
+    - bug: moving set amount each time, why?
+        - fixed: idk why, likely background stepping queue check
+    - bug: microstepping not working properly, fixed: was just rounding_steps
+        - last microstep moving too much, end of motor then keeps stepping
+        - still problem, b/c 1/8 steps more than it should
+    - bug: stepping at wrong ms, not sure dir working, fixed: didn’t reconfig at new motor (i.e. start at 3)
+    - bug: problem when TCOIE0 & TCCRA = 0 - shorts out and restarts
+        - fixed: ignore, irrelevant, don’t think delays use timer0
+- assimilated amo7_dir_arr and rounding steps into step_queue
+- added manual control when enc sw pressed
+    - moves at holding voltage
+    - reset unmoved steps when changing mode
+    - move button goes red during manual
+- add acceleration package
+    - acceleration on through serial
+    - update accel by shortening OCR0A -> 2 steps/s/step
+    - bug: accel only updates the next run through, fixed: reset local accel at end
+    - bug: decel twice as much???
+- timings:
+    - isr: rise (x91 = 145 = 9us), fall (x5d = 93 = 5.8 us), rst (x4f = 79 = 4.94 us)
+    - background_stepping: empty (xd = 13 = 0.81 us), full pass (x7d = 125 = 7.81 us), empty ms change (~x1a = 26 = 1.63 us), end (xa7 = 127 = 10.43 us)
+    - ***christian’s suggestion: keep track of time during interrupt -> more accurate speeds
+- keep minimizing overhead & global variables
+- display full and eighth (single int, use bitshifting)
+    - same as array-ish, but helpfully rolls over, simplifies rounding
+    - be careful about signs and bitwise ops
+    - bug: composite steps go infinite, fixed: was using ms display counter
+    - bug: negative steps go infinite, fixed: take sign then use absolute
+- wrote code to zero waveplate, waveplate_calib if sensor, else reg calib
+    - need better way since there’s home, enc, and sens pins for feedback
+- switched pins for connector, made code more general
+- make speed more accurate
+    - switched to timer1 for better resolution, prescaler 8 -> 1us res
+    - theoretical min del = 1us, practice = 0.1ms -> 10k step/s, max = 65000
+- rounding:
+    - move rounding steps when new motor only, doesn’t interrupt current
+    - can toggle through serial, starts false
+    - use manual_stepping for rounding steps
+
+Aug 5 2019 (Mon W8 - Su)
+- consolidated vout, added mode 
+- encoder fixed
+- bug: if i move.w to an ms and queue another, doesn’t stop the ms move
+    - works when it’s done by hand though???
+        - not sure i tried it with ms
+    - fixed: there was only one dir arr, got overwritten
+- bug: problem in move_motor, problem in delaytime
+    - maybe t < min time? overflow?
+    - fixed: didn’t reset delaytime after whiling to 0
+- changed to structs for motor variables
+    - loop at new microstep & new motor
+        - do i need those bools?
+    - accounted for array overflow
+- motor strangeness/tweaking:
+    - using interrupt, screen update etc kept interrupting 
+        - kept background stepping, but use timer to move within microstep
+        - timer continues during interrupt, switch off during
+    - tweaking: b/c high V = high torque -> harder to slow down when interrupted
+        - no tweak @ low V or uninterrupted stepping @ high V -> problem is interruption
+    - try PFD adjust: ln(0.6Vdd/Vpfd) (Vdd = 5V)
+        - no real change
+    - optimize wrt oscilloscope output
+        - need current to see, voltage just gives pulses
+- overhead:
+    - background stepping should be okay since overhead is at new motor & new ms where it’s okay
+    - calculate step shift before calling amo7_move_motor
+    - used bitwise shift instead of power for rounding_steps
+        - what does & do? what we want or not?
+    - replaced global constants w/ #define
+
+July 27 2019 (Mon W7 - Su)
+- replaced step size for arbitrary steps for each motor
+- made sure can’t step too far via 
+- change font size for large steps
+- accelerate up to speed with load
+- speed and pfd via serial
+
+July 22 2019 (Mon W6 - Su)
+- serial: updated for amo7, (38400 baud, 8N1)
+    - commands don’t work if delete button pressed: problem in amo6_serial_read
+    - should i fix? not my problem
+- ensure motors work with pretorque for backlash
+    - holding < pretorque < moving
+    - added holding voltage feature/button
+- merged pfd_update into stepper_dac_update
+
+July 15 2019 (Mon W5 - Su)
+- optimal pfd varies by motor, depends on V, I, back emf, speed
+- trim amo3 code, e.g. save, load
+    - add comments, clean up code
+- understand amo6
+    - learn serial parser
+- when double press move motor moves???
+    - moves same as step_array - move_array not being reset
+    - fixed: when delta array, move array -> 0, next time delta: move = step-0 = step
+- power error; casting pow() truncates decimal instead of rounding
+    - not sure if problem is only on arduino, should test
+    - fixed: lightly fixed by multiplying int by 2 each loop
+- motors appear to tweak
+    - increased delay, change voltage, maybe fingers?
+- contmove
+    - make only move_config uninterruptible
+    - not sure if interrupt is needed, seems to be working ok
+        - need atmega2560 datasheet for isr table
+        - redo table to be less than 1ms
+- edited code to use #define and be more proper
+- greyed out and disabled move button when stepping
+
+July 8 2019 (Mon W4 - Su)
+- bug where changing 1/8 on motor x changes 1/1 on motor x+1
+    - might be in buttons as it happens after button, or screen select, 
+    - somehow ended up motor 13?
+    - fixed: step arrays had only 3 instead of 4 for ms
+- deleted eeprom
+- added fx to make move red if d_step = 0 (not used)
+- added single step functionality in move
+- one psu only
+    - 12V, don’t go above 0.6A
+    - motors can be as low as needed, don’t go at rated V
+    - need to readjust v when psu goes off
+- bug: move motor moves negative even if old_dir is +
+    - only moves right at multiples of 8
+    - fixed: forgot how
+- pfd input
+    - does it need to be adjustable?
+    - there is eqn for pfd -> what do we want, what is ideal?
+    - increases current to 4A???
+        - we are drawing 7.2V though
+        - maybe we can toggle it with enable?
+        - its 0.3*vdd, not vbb (load voltage)
+- 2 1/4 change
+    - fix negative values problem
+    - fixed: %= rounding gives same as positive
+    - when single-stepping, bypasses move
+        - fixed: rounds if detect_movement = 0 and not at full step
+- timer interrupt for stepping so we can do other dtuff at the same time?
+    - have 5 second delays when stepping motor, might as well use them to work
+    - measure average time for loop
+    - tricky: what if i move other stepper motors during same time?
+    - limited by timing requirements of chips
+        - find out time it takes, millis
+    - do we need to grey things out?
+    - do i need to make service uninterruptible? NO I DONT
+        - what happens if process is interrupted?
+        - ie send as interrupt
+    - think its oscillating through all ms, not sure why
+    - occasionally won’t stop beeping
+
+July 1 2019 (Mon W3 - Su)
+- to do? DONE
+    - dac init has cs/ld high to start
+        - need to start high, bring low
+        - need to bring sdi back low after clocking in?
+        - make sure using uint otherwise signed bit
+    - dac code
+        - dac word takes leading 1 and extends through all remaining 32 digits
+    - make sure buttons and switches all do what they’re supposed to
+    - might have problem with board_config()
+        - if i set portc all to a value, does that mean i’m sending output when i’m sending input
+
+Jun 26 2019 (Wed W2 - Su)
+- to do? DONE
+    - init
+    - load_state
+    - save_state
+    - fault_check
+    - hardware_update
+- deleted an absolute ton of stuff relating to AMO3 DAC
+    - AMO3 was all about dac so a lot more stuff
+    - might as well completely delete it since dac and ports likely won’t be the same
+- how does amo6 serial work? DONE
+- what does latched do?
+- do i need to continually update outputs? DONE
+
+Jun 25 2019 (Tue W2  - Su)
+- bug: motor_config(), had 2^ms#, but should just be ms#
+- bitread operation: might be more streamlined than comparing bit by bit
+    - NO, bitread doesn’t exist in c++
+- tested functions on arduino, all okay
+- just did STEP config the hard way b/c im no bitch
+    - wait oops i already did it
+- still need to sort out amo3_enable and amo3_voltage_out? DELETED
+    - limited to 4 but there are 12 sm’s
+    - power and error checking depends on them a lot
+        - need to understand error checking to reconfig
+- still need to continually save steps? i.e. eeprom NOT DOING IT
+    - ask christian if I need to
+    - bring up fact that can only save so many times
+- configure DAC - DONE
+    - figure out DAC needs figure out amo3_voltage_out
+    - have to select internal reference & power-up all at startup
+- configure ON/OFF button - DONE
+    - when on/off send message powering down
+
+Jun 21 2019 (Fri W1 - Su)
+- need to refigure all when recommunicating w boards
+- 1 stepper driver to 1 motor
+- clock: 1 bit at a time
+- how do pin addresses change by board?
+- is there any way to detect how many motors are connected?
+- are the pins and ports on paper the ones i should refer to?
+- is there any way to refer to pin address individually rather than port address?
+- how does shift & storage clock work? i.e. does shift or storage clock trigger first?
+- test functions on arduino first
+- remember to set DDR
+
+Jun 19 2019 (Wed W1 - Su)
+- Not sure what to do
+- Need to configure parts to send signals to stepper motor
+- DEPV: appears to connect stepper to motors, what does enc1/2 and sens do?
+    - enc1/2 and sens appear to be inputs into K ports
+- pfd on a377 is about decay mode (get rid of back emf when switching V)
+- p3/IC9&8: pin 7 on IC9 -> SLEEP on IC8, and SLEEP is for all SMs - does that mean I can’t config direction for sm2?
+    - if config for 1, 2 becomes actiated too
+    - does it not matter, since step will be selectively toggled
+- not sure I can find depv09s565gtlf datasheet: what does it do?
+- how do we switch driver to motor connection st we get 12
+- how to send data to port
+- what to do about clock, how does clock work
+    - how to config clock?
+- purpose of the dac: only sets vref etc - essential?
+- why need set vref?
+    - what does pfd do?
+- seem to be missing pin8 on shift register (p3)
+
+Apr 7 2019 (Sun W1 - Spring)
+- What is list on right of p3? map from board to pins (output)?
+- why drv and dac, what is difference?
+- where do j and k pins go into?
+- enc, sens, and home meanings?
+- how do j and k pins control multiple stepper motors?
+- why does qh* on drv go from ic9 to 8? won’t infomration be same between both? (doesn’t matter since only one motor will be stepped)
+- how does clock work? how does clock need to be toggled to sync w/S
+
+Mar 12 2019 (Tues W10 - Winter)
+- need to link steps to ports - ask peter
+- need to figure out how to commandeer voltage & enable machinery
+- need to figure out fault machinery
+    - amo3_fault_check()
+        - sets 
+- do steps need to be saved to memory?
+
+Jan 22 2019 (Tues W3 - Winter)
+- what does latched mean?
+    - holding time (line 439)
+    - 0 toggles holding time count
+        - appear to toggle one another (sets 
+        - amo6_hold_count counts time held before threshold
+        - amo6_count_latch checks whether latched or notb
+- how to use eemem to store values?
+    - #include <avr/eeprom.h>, look into that?
+- what is save flag used for?
+    - maybe has to do with a beep?
+- apparently, need to convert V -> mV -> counts
+    - mV b/ store as int, not float
+- dac? is this the individual voltage unit?
+    - What is amo3_vout_dac? Seems like object
+        - How to reach commands for this object?
+    - Looks to be AD5544
+- how to find which buttons do what?
+    - likely look at technical drawing
+    - ENCA/B/SW & SW1/2
+    - SW1 = - (R), SW2 = + (Bl)
+- what does the encoder do?
+    - encoder is potentiometer-type device, rotating thing
+    - how does it store rotation?
+    - where does the encoder val come from? i.e. how is it read?
+        - what is range of encoder val?
+            - appears to be +- 1
+        - how does encoder val translate to V?
+            - appears to be /2000
+- what does interaction w/serial do?
+    - computer interaction, likely
+    - debugging?
+- what does sprintf do?
+    - lots of % signs - what do they do?
+        - placeholder?
+- shortpress mechanism seems complex
+    - use of & in parameter - passing by etc?
+
+Dec 2018
+- need to investigate long press mechanism
+    - was done on Cleo, probably same?
+    - does this have to do with latch?
+- big question: why haven’t my changes been working?
+- how does sound work?
+    - Buzzer?
+
+
