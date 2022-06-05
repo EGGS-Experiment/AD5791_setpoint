@@ -1,7 +1,7 @@
 /*
  * main program file
  *
- * Copyright 2013--2019 
+ * Copyright 2013--2022
  *  Christian Schneider <software(at)chschneider(dot)eu>
  *  Peter Yu <ucla(dot)eshop(at)gmail(dot)com>
  *  Clayton Ho <claytonho(at)g(dot)ucla(dot)edu>
@@ -22,74 +22,92 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// ////////////////////////////////////////////////////////////////////////
+// IMPORTS
+// ////////////////////////////////////////////////////////////////////////
+
+// AVR imports
 #include "config.h"
 #include <stdio.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
+// Core Device imports
 #include "serial_console.h"
 #include "led.h"
 #include "spi_flex.h"
-
 #include "CleO.hpp"
+
+// AMO Imports
+#include "core/amo_core.hpp"
 #include "amo7.hpp"
 
 
 int main(void) {
     // ////////////////////////////////////////////////////////////////////////
     // initialization
-    // ////////////////////////////////////////////////////////////////////////
-    
+    // ///////////////////////////////////////////////////////////////////////
+
     // LED
     led_init();
-    
+
     // initialize serial console and redirect printf(), getchar() etc. to it
     serial_console_init();  // enables interrupt!
-    
-    // AMO3
+
+    // AMO Core
+    amo6_ext_init();
+    amo6_screen_init();
+    amo6_buttons_init();
+
+    // AMO7
     amo7_init();
-    
+
     // ////////////////////////////////////////////////////////////////////////
     // boot indicator
     // ////////////////////////////////////////////////////////////////////////
-    
+
     led_blink(3);
     led_on();
-    
+
     // ////////////////////////////////////////////////////////////////////////
     // finally: turn on interrupts
     // ////////////////////////////////////////////////////////////////////////
-    
+
     sei();
-    
+
     // ////////////////////////////////////////////////////////////////////////
-    // main program loop
-    // ////////////////////////////////////////////////////////////////////////
-    
     // give status message
+    // ////////////////////////////////////////////////////////////////////////
+
     printf("%s\n", device_name);
     printf("Device ID : %s\n", device_id);
     printf("Hardware ID : %s\n", hardware_id);
     printf("Firmware ID : %s\n", firmware_id);
     printf("Device Ready\n");
-    
-    uint16_t counter=0;
+
+    // ////////////////////////////////////////////////////////////////////////
+    // main program loop
+    // ////////////////////////////////////////////////////////////////////////
+
+    uint16_t counter = 0;
     bool no_op=1;
     for (;;) {
-        if (counter%(5)==0) {
-            amo7_background_stepping();
+        // update hardware every 50 loops
+        if (counter % 50 == 0) {
+            amo7_hardware_update();
             no_op = 0;
         }
-        if (counter%100==0) {
+        // update interface every 100 loops
+        if (counter % 100 == 0) {
             amo6_buttons_update();
-            amo6_serial_update();
             amo6_screen_update();
-            no_op=0;
+            amo6_serial_update();
+            no_op = 0;
         }
+        // delay 1ms if nothing happened
         if (no_op) _delay_ms(1);
         else no_op=1;
         counter++;
     }
-    
     return 0;
 }

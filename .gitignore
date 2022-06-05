@@ -1,11 +1,26 @@
-out.elf
-out.hex
-*.o
+# These are some examples of commonly ignored file patterns.
+# You should customize this list as applicable to your project.
+# Learn more about .gitignore:
+#     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
-# OSX
-**/.DS_store
+# Node artifact files
+node_modules/
+dist/
+*.class
+*.py[cod]
 
-# IntelliJ
+# JetBrains IDE
 .idea/**
 **/.idea
 .idea
+TEST*.xml
+
+# OSX
+**/.DS_store
+Thumbs.db
+
+# out
+*.elf
+*.hex
+*.o
+apache2_is_running
