@@ -1,3 +1,11 @@
 out.elf
 out.hex
 *.o
+
+# OSX
+**/.DS_store
+
+# IntelliJ
+.idea/**
+**/.idea
+.idea
