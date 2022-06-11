@@ -36,9 +36,9 @@
 #include "serial_console.h"
 #include "led.h"
 #include "spi_flex.h"
-#include "CleO.hpp"
 
 // AMO Imports
+#include "CleO/CleO.cpp"
 #include "core/amo_core.hpp"
 #include "amo7.hpp"
 

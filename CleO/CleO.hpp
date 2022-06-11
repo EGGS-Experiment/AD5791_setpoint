@@ -6,8 +6,8 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "spi_flex.h"
-#include "serial_console.h"
+#include "../spi_flex.h"
+#include "../serial_console.h"
 #include "CleO_common.hpp"
 //#define REPORT(VAR) (Serial.print(#VAR "="), Serial.println(VAR, HEX))
 

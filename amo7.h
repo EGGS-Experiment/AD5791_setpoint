@@ -12,6 +12,9 @@
 #include <avr/interrupt.h>
 #include <util/atomic.h>
 
+//CleO
+#include "CleO/CleO.hpp"
+
 
 //////////////////////////////////////////////////////////////////////////////////////
 // TRACKING
@@ -90,7 +93,7 @@ bool        amo7_DAC_state = false, amo7_DAC_state_old = false;
     //Stores the DAC voltage
 uint32_t    amo7_DAC_cnts = 0, amo7_DAC_cnts_old = 0;
 
-//todo: conversion function
+
 //Functions
     //Initializes all the relevant ports, registers, pins, and hardware
 void amo7_init                   ();
