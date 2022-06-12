@@ -30,3 +30,24 @@
 *.exe
 *.out
 *.app
+
+# Node artifact files
+node_modules/
+dist/
+*.class
+*.py[cod]
+
+# JetBrains IDE
+.idea/**
+**/.idea
+.idea
+TEST*.xml
+
+# OSX
+**/.DS_store
+Thumbs.db
+
+# out
+*.elf
+*.hex
+apache2_is_running
