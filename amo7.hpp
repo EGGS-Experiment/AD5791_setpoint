@@ -272,7 +272,7 @@ void amo7_init () {
 
     //start up DAC
     uint32_t init_input = 0x00000004;                       //set OPGND=0, DACTRI=0, BIN=0, LINCOMP=0
-    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_LOAD));             //bring CS/LD low to begin serial input
+    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_SYNC));             //bring CS/LD low to begin serial input
 
     for (uint8_t i=0; i<=23; ++i){                          //enter in all letters of DAC input
         AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));        //bring clock low since DAC clocks in on rising edge
@@ -284,13 +284,13 @@ void amo7_init () {
         AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);           //bring clock high to input bit
         init_input >>= 1;                                   //move to next bit for input
     }
-    AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);                //CS/LD high to finish serial input
+    AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_SYNC);                //CS/LD high to finish serial input
 }
 
 void amo7_set_dac(const uint32_t cnts) {
     uint32_t dac_input = 0x00100000 | cnts;             //dac_input holds input for dac as sequential 24-bit word
 
-    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_LOAD));         //bring CS/LD low to begin serial input
+    AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_SYNC));         //bring CS/LD low to begin serial input
 
     for (uint8_t i=0; i<=23; ++i){                      //enter in all letters data of dac_input
         AMO7_DRV_DAC_PORT &= ~(_BV(AMO7_DAC_CLOCK));    //bring clock low since DAC clocks in on rising edge
@@ -303,7 +303,7 @@ void amo7_set_dac(const uint32_t cnts) {
         AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_CLOCK);       //bring clock high to input bit
         dac_input <<= 1;                                //move to next bit for input
     }
-    AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_LOAD);            //CS/LD high to finish serial input
+    AMO7_DRV_DAC_PORT |= _BV(AMO7_DAC_SYNC);            //CS/LD high to finish serial input
 }
 
 void amo7_hardware_update(){
