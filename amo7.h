@@ -1,6 +1,5 @@
 #ifndef AMO7_H
 #define AMO7_H 1
-//todo: redo cleo imports & look up c++ imports
 //todo: understand makefiles and get toolchain on mac & windows
 //STD
 #include <stdlib.h>
