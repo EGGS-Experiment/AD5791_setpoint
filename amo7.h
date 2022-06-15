@@ -88,7 +88,8 @@ enum{       //Labels for screen tags
 
 //Variables
     //Stores the DAC power state
-bool        amo7_DAC_state = false, amo7_DAC_state_old = false;
+bool        amo7_DAC_state = false;
+bool        amo7_DAC_state_old = false;
     //Stores the DAC voltage
 uint32_t    amo7_DAC_cnts = 0, amo7_DAC_cnts_old = 0;
 
