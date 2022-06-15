@@ -313,7 +313,7 @@ void amo7_hardware_update(){
         if ((amo7_DAC_state_old) && (amo7_DAC_state_old == amo7_DAC_state)) {
             amo7_set_dac(amo7_DAC_cnts);
         }
-        amo7_DAC_cnts = amo7_DAC_cnts_old;
+        amo7_DAC_cnts_old = amo7_DAC_cnts;
     }
 
     // power changed
@@ -325,7 +325,7 @@ void amo7_hardware_update(){
         } else {
             amo7_set_dac(0);
         }
-        amo7_DAC_state = amo7_DAC_state_old;
+        amo7_DAC_state_old = amo7_DAC_state;
     }
 }
 
